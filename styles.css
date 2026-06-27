@@ -4,6 +4,15 @@
    by the theme system.
    ========================================================================= */
 
+/* Custom title font (ja-jp.ttf — provided by the user) */
+@font-face {
+    font-family: 'ConstellationTitle';
+    src: url('ja-jp.ttf?v=16') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     --bg-color:        #14171a;
     --card-color:      #1d2024;
@@ -61,19 +70,9 @@ body[data-view="main-menu"] {
     color: var(--primary-text);
     font-size: 2.2em;
     margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
     font-weight: 600;
     letter-spacing: 0.5px;
-}
-.header-element-icon {
-    display: inline-block;
-    width: 18px; height: 18px;
-    border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 0 2px var(--bg-color), 0 0 0 3px var(--accent);
-    flex-shrink: 0;
+    font-family: 'ConstellationTitle', sans-serif;
 }
 .header-right { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
 #live-clock {
@@ -174,8 +173,10 @@ main {
     opacity: 0.08;
     stroke-dasharray: 0.8 1.2;
 }
-/* when a star is hovered, brighten all lines */
-#main-menu:has(.const-star:hover) .const-lines line { opacity: 0.5; }
+/* when a star is hovered, highlight only the lines connected to it (dim the rest) */
+#main-menu:has(.const-star:hover) .const-lines line { opacity: 0.12; }
+.constellation-svg .const-lines line.highlighted { opacity: 0.9 !important; stroke-width: 0.5; }
+.constellation-svg .const-lines line.dimmed { opacity: 0.08 !important; }
 #main-menu:has(.const-star:hover) .const-lines-faint line { opacity: 0.25; }
 #main-menu:has(.const-star:hover) .const-rings circle { opacity: 0.2; }
 
@@ -712,6 +713,18 @@ body[data-edit-weekly="true"] #weekly-add-row { display: flex; }
 .day-cell.highlight-red { background-color: rgba(237,66,69,0.35); }
 .day-cell.highlight-yellow { background-color: rgba(250,166,26,0.35); }
 .day-cell.highlight-green { background-color: rgba(59,165,93,0.35); }
+/* Gold dot on days where a 5★ was pulled — the "when did I get lucky" marker. */
+.five-star-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--gold, #f0b90b);
+    box-shadow: 0 0 5px rgba(240, 185, 11, 0.8);
+    pointer-events: none;
+}
 
 /* ===== Map tracker ===== */
 .map-tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 18px; }
@@ -770,6 +783,21 @@ body[data-edit-weekly="true"] #weekly-add-row { display: flex; }
 .theme-chip-swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid var(--card-color); }
 .theme-chip-name { font-size: 0.7em; color: var(--secondary-text); letter-spacing: 0.5px; }
 .theme-chip.selected .theme-chip-name { color: var(--primary-text); }
+/* ===== Constellation layout picker ===== */
+.layout-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 360px; margin: 0 auto; }
+.layout-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--card-color);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.layout-chip:hover { border-color: var(--accent); }
+.layout-chip.selected { border-color: var(--accent); background: var(--accent-dim); }
+.layout-chip-name { font-size: 0.85em; color: var(--secondary-text); letter-spacing: 0.3px; }
+.layout-chip.selected .layout-chip-name { color: var(--primary-text); }
 .custom-accent-row { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
 .custom-accent-row input[type="color"] { width: 40px; height: 32px; border: 1px solid var(--border-color); border-radius: 4px; background: transparent; cursor: pointer; padding: 2px; }
 

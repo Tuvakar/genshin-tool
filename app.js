@@ -11,6 +11,7 @@ const STORAGE_KEY     = 'genshinTrackerData_v3';
 const OLD_STORAGE_KEY = 'genshinTrackerData_v2_stable';
 const ITEM_DB_KEY     = 'genshinItemDB_v4';
 const THEME_KEY       = 'genshinTheme_v1';
+const LAYOUT_KEY      = 'genshinLayout_v1';   // selected constellation layout preset id
 const ACCOUNTS_KEY    = 'genshinAccounts_v1';   // { activeId, list: [{id, name}] }
 // Each account's data lives under DATA_PREFIX + accountId.
 const DATA_PREFIX     = 'genshinTrackerData_v3_acc_';
@@ -45,6 +46,100 @@ const BANNERS = [
     { id:'200', name:'Standard',         type:'standard',   hardPity5:90, softPity5:74, hardPity4:10, has5050:false, hasFatePoints:false },
     { id:'500', name:'Chronicled Wish',  type:'chronicled', hardPity5:90, softPity5:74, hardPity4:10, has5050:false, hasFatePoints:false },
 ];
+
+// ---------- Constellation layout presets ----------
+// Each preset defines positions (x,y as % of the menu box) for the 6 nav stars and the
+// connecting lines (pairs of star keys). Stars are keyed by their data-view target.
+// The order of stars[] determines entry-animation order.
+const STAR_ICONS = {
+    'view-primos':   '<path d="M12,1L9,9L1,12L9,15L12,23L15,15L23,12L15,9L12,1Z"/>',
+    'view-tasks':    '<path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M8.5,13.5L10.5,15.5L15,11L16.5,12.5L10.5,18.5L7,15L8.5,13.5Z"/>',
+    'view-gacha':    '<path d="M12,17.27L18.18,21L17,14.63L22,9.72L15.45,8.81L12,2.5L8.55,8.81L2,9.72L7,14.63L5.82,21L12,17.27Z"/>',
+    'view-calendar': '<path d="M19,19H5V8H19M19,3H18V1H16V3H8V1H6V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M16.5,12H12.5V17H16.5V12Z"/>',
+    'view-map':      '<path d="M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12,2Z"/>',
+    'view-settings': '<path d="M19.43,12.98C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.98L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.98M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5Z"/>',
+};
+const STAR_LABELS = {
+    'view-primos':'Primogems', 'view-tasks':'Tasks', 'view-gacha':'Gacha Log',
+    'view-calendar':'Calendar', 'view-map':'Map', 'view-settings':'Settings',
+};
+const CONSTELLATION_LAYOUTS = [
+    // Preset 1 — "Aurora" (original Y/branch with a central hub)
+    { id:'aurora', name:'Aurora', stars:{
+        'view-primos':   {x:50,y:18}, 'view-tasks':{x:22,y:42}, 'view-gacha':{x:45,y:50},
+        'view-calendar': {x:66,y:44}, 'view-map':{x:72,y:80},   'view-settings':{x:86,y:20},
+      }, lines:[['view-primos','view-gacha'],['view-tasks','view-gacha'],['view-gacha','view-calendar'],['view-calendar','view-map'],['view-calendar','view-settings']],
+      order:['view-primos','view-tasks','view-gacha','view-calendar','view-map','view-settings'] },
+    // Preset 2 — "Comet" (traced from user sketch image 1, pattern 2; Map moved to user's red marker at 50,68)
+    { id:'comet', name:'Comet', stars:{
+        'view-tasks':    {x:10,y:54}, 'view-primos':{x:30,y:23}, 'view-settings':{x:39,y:90},
+        'view-map':      {x:50,y:68}, 'view-gacha':{x:86,y:10},  'view-calendar':{x:90,y:49},
+      }, lines:[['view-gacha','view-calendar'],['view-primos','view-tasks'],['view-primos','view-map'],['view-calendar','view-settings'],['view-tasks','view-settings']],
+      order:['view-tasks','view-primos','view-settings','view-map','view-gacha','view-calendar'] },
+    // Preset 3 — "Crown" (traced from user sketch image 1, pattern 3; Settings & Calendar swapped per user request)
+    { id:'crown', name:'Crown', stars:{
+        'view-primos':   {x:10,y:38}, 'view-calendar':{x:17,y:65}, 'view-tasks':{x:43,y:61},
+        'view-gacha':    {x:51,y:10}, 'view-map':{x:71,y:90},      'view-settings':{x:90,y:31},
+      }, lines:[['view-gacha','view-tasks'],['view-primos','view-tasks'],['view-primos','view-calendar'],['view-tasks','view-calendar'],['view-tasks','view-map']],
+      order:['view-primos','view-calendar','view-tasks','view-gacha','view-map','view-settings'] },
+    // Preset 4 — "Lyra" (traced from user sketch image 2, pattern 1; renamed from River per user request)
+    { id:'lyra', name:'Lyra', stars:{
+        'view-tasks':    {x:10,y:58}, 'view-settings':{x:33,y:89}, 'view-gacha':{x:49,y:10},
+        'view-map':      {x:70,y:90}, 'view-primos':{x:83,y:24},   'view-calendar':{x:90,y:61},
+      }, lines:[['view-gacha','view-primos'],['view-primos','view-calendar'],['view-tasks','view-settings'],['view-calendar','view-map'],['view-settings','view-map']],
+      order:['view-tasks','view-settings','view-gacha','view-map','view-primos','view-calendar'] },
+];
+let _activeLayout = 'aurora';
+function loadLayout() {
+    try { _activeLayout = JSON.parse(localStorage.getItem(LAYOUT_KEY)||'{}').id || 'aurora'; } catch(e){ _activeLayout='aurora'; }
+    if (!CONSTELLATION_LAYOUTS.find(l => l.id===_activeLayout)) _activeLayout = 'aurora';
+}
+function saveLayout(id) { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({id})); } catch(e){} }
+// Render the constellation stars + connecting lines into #main-menu based on the active preset.
+function renderConstellation() {
+    const menu = document.getElementById('main-menu'); if (!menu) return;
+    const preset = CONSTELLATION_LAYOUTS.find(l => l.id===_activeLayout) || CONSTELLATION_LAYOUTS[0];
+    // Render connecting lines into the SVG <g class="const-lines">. Each line is tagged with
+    // data-a/data-b (the two star views it connects) so the hover-highlight can dim lines not
+    // connected to the hovered star.
+    const linesG = menu.querySelector('.const-lines'); if (linesG) {
+        linesG.innerHTML = preset.lines.map(([a,b]) => {
+            const sa = preset.stars[a], sb = preset.stars[b];
+            return `<line x1="${sa.x}" y1="${sa.y}" x2="${sb.x}" y2="${sb.y}" data-a="${a}" data-b="${b}"/>`;
+        }).join('');
+    }
+    // Remove old stars (keep the .constellation-sky wrapper).
+    menu.querySelectorAll('.const-star').forEach(s => s.remove());
+    // Inject new stars in the preset's entry-animation order.
+    preset.order.forEach((view, i) => {
+        const pos = preset.stars[view]; if (!pos) return;
+        const btn = document.createElement('button');
+        btn.className = 'const-star';
+        btn.style.setProperty('--x', pos.x + '%');
+        btn.style.setProperty('--y', pos.y + '%');
+        btn.dataset.view = view;
+        btn.id = 'star-' + view.replace('view-','');
+        btn.innerHTML = `<span class="star-halo"></span><span class="star-node"><svg viewBox="0 0 24 24">${STAR_ICONS[view]||''}</svg></span><span class="star-label">${STAR_LABELS[view]||''}</span>`;
+        btn.addEventListener('click', () => showView(view));
+        // Hover: highlight only the lines connected to this star (dim the rest).
+        btn.addEventListener('mouseenter', () => {
+            menu.querySelectorAll('.const-lines line').forEach(ln => {
+                if (ln.dataset.a === view || ln.dataset.b === view) ln.classList.add('highlighted');
+                else ln.classList.add('dimmed');
+            });
+        });
+        btn.addEventListener('mouseleave', () => {
+            menu.querySelectorAll('.const-lines line').forEach(ln => { ln.classList.remove('highlighted','dimmed'); });
+        });
+        menu.appendChild(btn);
+    });
+}
+function setLayout(id) {
+    if (!CONSTELLATION_LAYOUTS.find(l => l.id===id)) return;
+    _activeLayout = id; saveLayout(id); renderConstellation();
+    // Re-trigger the entry animation on the new layout.
+    try { animateConstellationEntry(); } catch(e){}
+}
 
 const IMPORT_BANNER_TYPES = [
     { id:'301', name:'Character Event' },
@@ -773,7 +868,7 @@ function rerenderPulls(bannerId) {
         else if (p.win===true) { outcomeTag = '<span class="pull-tag win">WIN</span>'; }
         else if (p.win===false) { outcomeTag = '<span class="pull-tag loss">LOSS</span>'; }
         const date = p.time ? new Date(p.time).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) : '';
-        return `<div class="gacha-pull ${pullCls}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${outcomeTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`;
+        return `<div class="gacha-pull ${pullCls}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${outcomeTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity, cfg.softPity5)}">${p.pity}</span></div>`;
     }).join('');
 }
 
@@ -834,7 +929,9 @@ function renderGachaStats() {
     const allWishes = state.gachaLog.wishes;
     const primoIcon = `<svg viewBox="0 0 24 24" style="width:1em;height:1em;fill:var(--light-blue);vertical-align:-0.15em;margin-right:5px;"><path d="M12,1L9,9L1,12L9,15L12,23L15,15L23,12L15,9L12,1Z"/></svg>`;
     const f = (n,d) => (n||0).toFixed(d==null?2:d);
-    const pityCls = p => p>=cfg.softPity5?'pity-high':p<=20?'pity-low':'pity-mid';
+    // pityCls takes the soft-pity threshold so it works for any banner (character 74, weapon 63).
+    // Defined here at outer scope (before the BANNERS.forEach loop) — must NOT reference `cfg`.
+    const pityCls = (p, soft) => p>=soft?'pity-high':p<=20?'pity-low':'pity-mid';
     let html = '<div class="gacha-view-layout">';
     BANNERS.forEach(cfg => {
         const bw = allWishes.filter(w => w.gacha_type===cfg.id);
@@ -875,7 +972,7 @@ function renderGachaStats() {
                 else if (p.win===true) { outcomeTag = '<span class="pull-tag win">WIN</span>'; }
                 else if (p.win===false) { outcomeTag = '<span class="pull-tag loss">LOSS</span>'; }
                 const date = p.time ? new Date(p.time).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) : '';
-                return `<div class="gacha-pull ${pullCls}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${outcomeTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`;
+                return `<div class="gacha-pull ${pullCls}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${outcomeTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity, cfg.softPity5)}">${p.pity}</span></div>`;
             }).join('');
             details += `<div class="gacha-pulls-header"><label class="pull-sort-label">Sort 5\u2605 pulls: <select class="pull-sort" data-banner="${cfg.id}">${opts}</select></label><span class="pull-count-text">${s.five.list.length} total</span></div><div class="gacha-pulls-container" data-pulls-banner="${cfg.id}">${pullsHtml}</div>`;
         }
@@ -1544,7 +1641,14 @@ function renderCalendar() {
     if (!state.gachaLog || !state.gachaLog.wishes) { grid.innerHTML = `<p style="text-align:center;grid-column:1/-1;color:var(--secondary-text);">Import gacha log to see calendar.</p>`; return; }
     const wishesForYear = state.gachaLog.wishes.filter(w => new Date(w.time).getFullYear()===year);
     const pullsByDay = {};
-    wishesForYear.forEach(w => { const dk = w.time.substring(0, 10); pullsByDay[dk] = (pullsByDay[dk]||0)+1; });
+    const fiveStarDays = new Set(); // days that have at least one 5★ pull — shown as a gold dot
+    wishesForYear.forEach(w => {
+        const dk = w.time.substring(0, 10);
+        pullsByDay[dk] = (pullsByDay[dk]||0)+1;
+        // Mark the day if this pull is a 5★ (check rarity DB, fall back to rank_type).
+        const rarity = getItemRarity(w.name) || parseInt(w.rank_type, 10);
+        if (rarity === 5) fiveStarDays.add(dk);
+    });
     const todayKey = toLocalISO(getAppDate());
     grid.innerHTML = months.map((name, month) => {
         const firstDay = new Date(year, month, 1).getDay();
@@ -1556,7 +1660,9 @@ function renderCalendar() {
             let hClass = pc>5?'highlight-green':pc===5?'highlight-yellow':pc>0?'highlight-red':'';
             if (dk===todayKey) hClass += ' today';
             if (pc) hClass += ' has-pulls';
-            days += `<div class="day-cell ${hClass}" data-date="${dk}"><span>${day}</span>${pc?`<div class="pull-count">${pc}</div>`:''}</div>`;
+            if (fiveStarDays.has(dk)) hClass += ' has-five-star';
+            // The gold dot is added when the day has a 5★, alongside the pull count.
+            days += `<div class="day-cell ${hClass}" data-date="${dk}"><span>${day}</span>${pc?`<div class="pull-count">${pc}</div>`:''}${fiveStarDays.has(dk)?'<div class="five-star-dot" title="5★ pulled this day"></div>':''}</div>`;
         }
         return `<div class="month"><h4>${name}</h4><div class="day-headers">${['S','M','T','W','T','F','S'].map(d=>`<div>${d}</div>`).join('')}</div><div class="days-grid">${days}</div></div>`;
     }).join('');
@@ -1606,16 +1712,21 @@ function renderSettings() {
         </div>
         <div class="settings-section"><h3>Theme</h3><div class="theme-grid">${chips}</div>
             <div class="custom-accent-row"><label for="custom-accent-input">Custom accent:</label><input type="color" id="custom-accent-input" value="${customAccent || THEMES[theme].accent}">${customAccent?'<button class="btn-icon" id="reset-accent-btn" title="Reset to theme accent">Reset</button>':''}</div></div>
+        <div class="settings-section"><h3>Constellation Layout</h3>
+            <p style="text-align:center;color:var(--secondary-text);font-size:0.85em;margin:0 0 12px;">Choose how the 6 nav stars are arranged on the main menu.</p>
+            <div class="layout-grid">${CONSTELLATION_LAYOUTS.map(l => `<button class="layout-chip ${l.id===_activeLayout?'selected':''}" data-layout="${l.id}"><span class="layout-chip-name">${l.name}</span></button>`).join('')}</div>
+        </div>
         <div class="settings-section"><h3>General Resets</h3><div class="controls-group" style="margin-top:0;"><button id="manual-reset-btn" class="btn btn-secondary">Perform Daily Task Reset</button><button id="reset-primo-btn" class="btn btn-secondary">Reset Primogem Count</button></div></div>
         <div class="settings-section"><h3>Date Override</h3><p id="custom-date-display" style="text-align:center;color:var(--secondary-text);margin-bottom:10px;">${dateDisplay}</p><div class="controls-group" style="margin-top:0;"><button id="set-date-btn" class="btn btn-secondary">Set Custom Date</button><button id="sync-date-btn" class="btn btn-secondary" style="display:${state.customDate?'block':'none'};">Sync to Today</button></div></div>
         <div class="settings-section"><h3>Data Backup</h3><div class="data-buttons"><button id="export-data-btn" class="btn btn-primary">Export Data</button><button id="import-data-btn" class="btn btn-secondary">Import Data</button><input type="file" id="import-data-file" accept=".json" style="display:none;"></div></div>
         <div class="settings-section"><h3>Danger Zone</h3><div class="controls-group" style="margin-top:0;"><button id="reset-all-btn" class="btn btn-clear">Clear &amp; Reset This Account</button></div></div>
         <div class="settings-section" style="text-align:center;color:var(--secondary-text);font-size:0.8em;opacity:0.7;">
-            <p>Constellation v13 &middot; timeout-protected import</p>
+            <p>Constellation v20 &middot; timeout-protected import</p>
             <p style="font-size:0.9em;margin-top:4px;">If the import hangs on "via corsproxy.io" for more than 10 seconds without falling back, you are viewing a CACHED old version. Hard-refresh (Ctrl+Shift+R / Cmd+Shift+R) to load the latest.</p>
         </div>
     </div>`;
     document.querySelectorAll('.theme-chip').forEach(chip => chip.addEventListener('click', () => { const n=chip.dataset.theme; applyTheme(n, _customAccent); saveTheme(n, _customAccent); renderSettings(); }));
+    document.querySelectorAll('.layout-chip').forEach(chip => chip.addEventListener('click', () => { setLayout(chip.dataset.layout); showView('main-menu'); renderSettings(); }));
     const ai = $('custom-accent-input');
     if (ai) { ai.addEventListener('input', e => applyTheme(_activeTheme, e.target.value)); ai.addEventListener('change', e => { saveTheme(_activeTheme, e.target.value); renderSettings(); }); }
     const ra = $('reset-accent-btn'); if (ra) ra.addEventListener('click', () => { _customAccent=null; applyTheme(_activeTheme, null); saveTheme(_activeTheme, null); renderSettings(); });
@@ -1779,10 +1890,21 @@ function trashSvg() { return '<svg viewBox="0 0 24 24"><path d="M19,4H15.5L14.5,
 function reimportSvg() { return '<svg viewBox="0 0 24 24"><path d="M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12H4A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z"/></svg>'; }
 
 // ---------- Render orchestration ----------
-function renderAll() { renderTasks(); renderPrimos(); renderGachaStats(); renderCalendar(); renderSettings(); renderStatusBar(); }
+// Each render is wrapped in its own try/catch so a throw in one (e.g. bad data hitting
+// renderGachaStats) can't abort the rest and leave the UI half-rendered — which is what
+// happened when switchAccount called renderAll and a render throw froze the view.
+function renderAll() {
+    try { renderTasks(); } catch(e) { console.warn('renderTasks failed', e); }
+    try { renderPrimos(); } catch(e) { console.warn('renderPrimos failed', e); }
+    try { renderGachaStats(); } catch(e) { console.warn('renderGachaStats failed', e); }
+    try { renderCalendar(); } catch(e) { console.warn('renderCalendar failed', e); }
+    try { renderSettings(); } catch(e) { console.warn('renderSettings failed', e); }
+    try { renderStatusBar(); } catch(e) { console.warn('renderStatusBar failed', e); }
+}
 
 function bindGlobalEvents() {
-    document.querySelectorAll('#main-menu .const-star').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
+    // Note: constellation star click handlers are bound in renderConstellation() (per-layout),
+    // not here, because stars are injected dynamically based on the selected layout preset.
     $('btn-back-main').addEventListener('click', () => showView('main-menu'));
     const tick = () => { $('live-clock').textContent = new Date().toLocaleTimeString('en-US', { hour12:true, hour:'2-digit', minute:'2-digit' }); };
     tick(); setInterval(tick, 1000);
@@ -1819,6 +1941,8 @@ async function init() {
     // Start the clock + bind nav clicks FIRST so the header is alive immediately.
     try { startResinTicker(); } catch(e) { console.warn('startResinTicker failed', e); }
     try { bindGlobalEvents(); } catch(e) { console.warn('bindGlobalEvents failed', e); }
+    // Render the constellation (stars + lines) from the saved layout preset before showing the menu.
+    try { loadLayout(); renderConstellation(); } catch(e) { console.warn('renderConstellation failed', e); }
     // Show the constellation menu BEFORE rendering the (hidden) sub-views. This way,
     // even if a sub-view render throws, the menu is already visible to the user.
     try { showView('main-menu'); } catch(e) { console.warn('showView failed', e); forceMenuVisible(); }
