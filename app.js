@@ -343,7 +343,7 @@ const ITEM_DB_FALLBACK = {
 
 // ---------- State ----------
 let state, itemDB = {}, _standardPool = new Set(), _mapData = null;
-let _activeTheme = 'Anemo', _customAccent = null, _editMode = false, _gachaSort = 'newest';
+let _activeTheme = 'Anemo', _customAccent = null, _dailyEditMode = false, _weeklyEditMode = false, _gachaSort = 'newest';
 let _viewAnimating = false, _resinInterval = null;
 
 function defaultPityState() {
@@ -878,7 +878,7 @@ function renderTasks() {
                 </div>
             </div>
             <div class="layout-column" style="flex:1;min-width:300px;">
-                <h2>Weekly Tasks <span class="streak-counter" id="weekly-reset-counter"></span></h2>
+                <h2>Weekly Tasks <span class="streak-counter" id="weekly-reset-counter"></span> <span class="streak-counter" id="weekly-edit-toggle-wrap"></span></h2>
                 <ul id="weekly-tasks-list" class="task-list"></ul>
                 <div class="task-add-row" id="weekly-add-row">
                     <input type="text" class="task-name-input" id="weekly-new-name" placeholder="New weekly task...">
@@ -886,19 +886,36 @@ function renderTasks() {
                 </div>
             </div>
         </div>`;
-    const wrap = $('daily-edit-toggle-wrap');
-    if (wrap) {
-        wrap.innerHTML = `<button class="btn-icon" id="edit-tasks-toggle" title="Edit tasks">${pencilSvg()}</button>`;
-        const tgl = $('edit-tasks-toggle');
+    // Daily edit toggle
+    const dWrap = $('daily-edit-toggle-wrap');
+    if (dWrap) {
+        dWrap.innerHTML = `<button class="btn-icon" id="edit-daily-toggle" title="Edit daily tasks">${pencilSvg()}</button>`;
+        const tgl = $('edit-daily-toggle');
         if (tgl) {
             tgl.addEventListener('click', () => {
-                _editMode = !_editMode;
-                document.body.setAttribute('data-edit-tasks', String(_editMode));
-                tgl.style.color = _editMode ? 'var(--accent)' : '';
-                tgl.style.borderColor = _editMode ? 'var(--accent)' : '';
+                _dailyEditMode = !_dailyEditMode;
+                document.body.setAttribute('data-edit-daily', String(_dailyEditMode));
+                tgl.style.color = _dailyEditMode ? 'var(--accent)' : '';
+                tgl.style.borderColor = _dailyEditMode ? 'var(--accent)' : '';
                 renderTaskLists();
             });
-            if (_editMode) { document.body.setAttribute('data-edit-tasks','true'); tgl.style.color='var(--accent)'; tgl.style.borderColor='var(--accent)'; }
+            if (_dailyEditMode) { document.body.setAttribute('data-edit-daily','true'); tgl.style.color='var(--accent)'; tgl.style.borderColor='var(--accent)'; }
+        }
+    }
+    // Weekly edit toggle
+    const wWrap = $('weekly-edit-toggle-wrap');
+    if (wWrap) {
+        wWrap.innerHTML = `<button class="btn-icon" id="edit-weekly-toggle" title="Edit weekly tasks">${pencilSvg()}</button>`;
+        const tgl = $('edit-weekly-toggle');
+        if (tgl) {
+            tgl.addEventListener('click', () => {
+                _weeklyEditMode = !_weeklyEditMode;
+                document.body.setAttribute('data-edit-weekly', String(_weeklyEditMode));
+                tgl.style.color = _weeklyEditMode ? 'var(--accent)' : '';
+                tgl.style.borderColor = _weeklyEditMode ? 'var(--accent)' : '';
+                renderTaskLists();
+            });
+            if (_weeklyEditMode) { document.body.setAttribute('data-edit-weekly','true'); tgl.style.color='var(--accent)'; tgl.style.borderColor='var(--accent)'; }
         }
     }
     renderTaskLists(); renderResinWidget();
@@ -910,16 +927,16 @@ function renderTasks() {
     $('weekly-reset-counter').textContent = `Reset in: ${d} ${d===1?'day':'days'}`;
 }
 function renderTaskLists() {
-    renderList($('daily-tasks-list'), state.dailyTasks, 'daily');
-    renderList($('weekly-tasks-list'), state.weeklyTasks, 'weekly');
+    renderList($('daily-tasks-list'), state.dailyTasks, 'daily', _dailyEditMode);
+    renderList($('weekly-tasks-list'), state.weeklyTasks, 'weekly', _weeklyEditMode);
 }
-function renderList(listEl, data, type) {
+function renderList(listEl, data, type, editMode) {
     if (!listEl) return;
     listEl.innerHTML = '';
     data.forEach((task, index) => {
         const li = document.createElement('li');
-        li.className = `task-item ${task.isEvent?'is-event':''} ${task.completed?'locked':''}`;
-        const nameHtml = _editMode
+        li.className = `task-item ${task.isEvent?'is-event':''} ${task.completed?'locked':''} ${editMode?'editing':''}`;
+        const nameHtml = editMode
             ? `<input type="text" class="task-name-input" value="${escAttr(task.name)}" data-type="${type}" data-index="${index}">`
             : `<label>${escHtml(task.name)}</label>`;
         const streakHtml = `<span class="streak-counter">Streak: ${task.streak||0}</span>`;
@@ -936,7 +953,7 @@ function renderList(listEl, data, type) {
         cb.addEventListener('change', e => { if (!e.target.checked) return; toggleTask(e.target.dataset.type, parseInt(e.target.dataset.index,10)); });
     });
     listEl.querySelectorAll('.fake-checkbox').forEach(fc => {
-        fc.addEventListener('click', e => { if (_editMode) return; handleEventTaskClick(e.target.dataset.type, parseInt(e.target.dataset.index,10)); });
+        fc.addEventListener('click', e => { if (editMode) return; handleEventTaskClick(e.target.dataset.type, parseInt(e.target.dataset.index,10)); });
     });
     listEl.querySelectorAll('input.task-name-input').forEach(inp => {
         inp.addEventListener('change', e => {
