@@ -1149,15 +1149,21 @@ function parsePaimonMoe(data) {
         'wish-counter-beginners': '100',
     };
     const wishes = [];
-    // Global counter so every pull gets a UNIQUE id. Without this, two pulls of
-    // the same item in one 10-pull (same name + same timestamp) would share an id
-    // and the Replace-All dedup-by-id would silently collapse them, dropping pulls
-    // and undercounting pity. The counter is appended (not replacing p.id) so the
-    // id stays non-numeric and routes through the reverse() path in analyzeBannerData.
-    let pmSeq = 0;
+    // paimon.moe stores pulls per banner in pull order (oldest first within each banner's
+    // pulls array). We assign each pull a NUMERIC id that encodes its position so that
+    // sorting by id (in analyzeBannerData) reproduces the true pull order — critical for
+    // correct pity counting within 10-pulls (same timestamp).
+    //
+    // The id is built as: <bannerCode><zero-padded per-banner sequence>.
+    // - bannerCode (e.g. 301) is a prefix so ids stay unique across banners.
+    // - The sequence is per-banner (NOT global) and zero-padded to 10 digits so string
+    //   comparison matches numeric comparison. This guarantees pulls within a banner sort
+    //   in the order paimon.moe stored them (= pull order).
     Object.keys(bannerKeys).forEach(bk => {
         const banner = data[bk];
         if (!banner || !Array.isArray(banner.pulls)) return;
+        const gachaBase = parseInt(bannerKeys[bk], 10); // e.g. 301
+        let perBannerSeq = 0;
         banner.pulls.forEach(p => {
             // Use the pull's own 'code' field as the gacha_type. Code 400 (Character
             // Event 2) is merged into 301 (Character Event) since we track them together.
@@ -1165,15 +1171,19 @@ function parsePaimonMoe(data) {
             const gachaType = (rawCode === '400') ? '301' : rawCode;
             const name = resolveItemName(p.id);
             const rarity = getItemRarity(name);
-            // If rarity is unknown (not in DB), use '0' so checkUnknownItems prompts the user.
+            // Numeric id: <gachaBase><10-digit sequence>. E.g. 3010000000001, 3010000000002, ...
+            // This sorts correctly as both a BigInt (numeric) and as a string (zero-padded),
+            // and stays unique per banner. Within a banner, id ASC = pull order.
+            const numericId = String(gachaBase) + String(perBannerSeq).padStart(10, '0');
             wishes.push({
-                id: 'pm_' + gachaType + '_' + p.time.replace(/[^0-9]/g, '') + '_' + (p.id || '') + '_' + String(pmSeq++).padStart(8, '0'),
+                id: numericId,
                 gacha_type: gachaType,
                 name: name,
                 item_type: p.type === 'character' ? 'Character' : 'Weapon',
                 rank_type: rarity ? String(rarity) : '0',
                 time: p.time,
             });
+            perBannerSeq++;
         });
     });
     return wishes;
@@ -1544,7 +1554,7 @@ function renderSettings() {
         <div class="settings-section"><h3>Data Backup</h3><div class="data-buttons"><button id="export-data-btn" class="btn btn-primary">Export Data</button><button id="import-data-btn" class="btn btn-secondary">Import Data</button><input type="file" id="import-data-file" accept=".json" style="display:none;"></div></div>
         <div class="settings-section"><h3>Danger Zone</h3><div class="controls-group" style="margin-top:0;"><button id="reset-all-btn" class="btn btn-clear">Clear &amp; Reset This Account</button></div></div>
         <div class="settings-section" style="text-align:center;color:var(--secondary-text);font-size:0.8em;opacity:0.7;">
-            <p>Constellation v10 &middot; timeout-protected import</p>
+            <p>Constellation v11 &middot; timeout-protected import</p>
             <p style="font-size:0.9em;margin-top:4px;">If the import hangs on "via corsproxy.io" for more than 10 seconds without falling back, you are viewing a CACHED old version. Hard-refresh (Ctrl+Shift+R / Cmd+Shift+R) to load the latest.</p>
         </div>
     </div>`;
