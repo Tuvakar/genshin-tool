@@ -9,7 +9,7 @@
 // ---------- Constants ----------
 const STORAGE_KEY     = 'genshinTrackerData_v3';
 const OLD_STORAGE_KEY = 'genshinTrackerData_v2_stable';
-const ITEM_DB_KEY     = 'genshinItemDB_v1';
+const ITEM_DB_KEY     = 'genshinItemDB_v2';
 const MAP_DATA_KEY    = 'genshinMapData_v1';
 const THEME_KEY       = 'genshinTheme_v1';
 const ACCOUNTS_KEY    = 'genshinAccounts_v1';   // { activeId, list: [{id, name}] }
@@ -66,31 +66,279 @@ const MAP_DATA_FALLBACK = {
 };
 
 const ITEM_DB_FALLBACK = {
-    'Alhaitham':5,'Albedo':5,'Aloy':5,'Arataki Itto':5,'Arlecchino':5,'Baizhu':5,'Cyno':5,'Dehya':5,'Diluc':5,'Emilie':5,
-    'Eula':5,'Furina':5,'Ganyu':5,'Hu Tao':5,'Jean':5,'Kaedehara Kazuha':5,'Kamisato Ayaka':5,'Kamisato Ayato':5,'Kinich':5,'Klee':5,
-    'Mona':5,'Mualani':5,'Nahida':5,'Neuvillette':5,'Nilou':5,'Qiqi':5,'Raiden Shogun':5,'Sangonomiya Kokomi':5,'Shenhe':5,'Sigewinne':5,
-    'Tartaglia':5,'Tighnari':5,'Venti':5,'Wanderer':5,'Wriothesley':5,'Xianyun':5,'Xiao':5,'Yae Miko':5,'Yelan':5,'Yoimiya':5,
-    'Yumemizuki Mizuki':5,'Zhongli':5,'Clorinde':5,'Chiori':5,'Chasca':5,'Mavuika':5,'Citlali':5,'Xilonen':5,'Skirk':5,'Escoffier':5,
-    'Lyney':5,'Navia':5,
-    'Amber':4,'Barbara':4,'Beidou':4,'Bennett':4,'Candace':4,'Charlotte':4,'Chongyun':4,'Collei':4,'Diona':4,'Dori':4,
-    'Faruzan':4,'Fischl':4,'Freminet':4,'Gaming':4,'Gorou':4,'Kachina':4,'Kaveh':4,'Kirara':4,'Kuki Shinobu':4,'Layla':4,
-    'Lynette':4,'Mika':4,'Ningguang':4,'Noelle':4,'Ororon':4,'Razor':4,'Rosaria':4,'Sayu':4,'Sethos':4,'Sucrose':4,
-    'Thoma':4,'Xiangling':4,'Xingqiu':4,'Xinyan':4,'Yun Jin':4,'Chevreuse':4,'Kaeya':4,'Lisa':4,'Shikanoin Heizou':4,'Yanfei':4,
+    'A Thousand Floating Dreams':5,
+    'Akuoumaru':4,
+    'Albedo':5,
+    'Alhaitham':5,
+    'Alley Hunter':4,
+    'Aloy':5,
+    'Amber':4,
+    'Amber Catalyst':3,
+    'Amenoma Kageuchi':4,
+    'Amos\' Bow':5,
+    'Apprentice\'s Notes':1,
+    'Aqua Simulacra':5,
+    'Aquila Favonia':5,
+    'Arataki Itto':5,
+    'Arlecchino':5,
+    'Baizhu':5,
+    'Ballad Of The Fjords':4,
+    'Ballad of the Boundless Blue':4,
+    'Barbara':4,
+    'Beacon of the Reed Sea':5,
+    'Beginner\'s Protector':1,
+    'Beidou':4,
+    'Bennett':4,
+    'Black Tassel':3,
+    'Blackcliff Agate':4,
+    'Blackcliff Longsword':4,
+    'Blackcliff Pole':4,
+    'Blackcliff Slasher':4,
+    'Blackcliff Warbow':4,
+    'Bloodtainted Greatsword':3,
+    'Calamity Queller':5,
+    'Candace':4,
+    'Cashflow Supervision':5,
+    'Charlotte':4,
+    'Chevreuse':4,
+    'Chiori':5,
+    'Chongyun':4,
+    'Cinnabar Spindle':4,
+    'Clorinde':5,
+    'Collei':4,
+    'Compound Bow':4,
+    'Cool Steel':3,
+    'Crane\'s Echoing Call':5,
+    'Crescent Pike':4,
+    'Crimson Moon\'s Semblance':5,
+    'Cyno':5,
+    'Dark Iron Sword':3,
+    'Deathmatch':4,
+    'Debate Club':3,
+    'Dehya':5,
+    'Dialogues of the Desert Sages':4,
+    'Diluc':5,
+    'Diona':4,
+    'Dodoco Tales':4,
+    'Dori':4,
+    'Dragon\'s Bane':4,
+    'Dragonspine Spear':4,
+    'Dull Blade':1,
+    'Ebony Bow':3,
+    'Elegy for the End':5,
+    'Emerald Orb':3,
+    'Emilie':5,
+    'End of the Line':4,
+    'Engulfing Lightning':5,
+    'Eula':5,
+    'Everlasting Moonglow':5,
+    'Eye of Perception':4,
+    'Fading Twilight':4,
+    'Faruzan':4,
+    'Favonius Codex':4,
+    'Favonius Greatsword':4,
+    'Favonius Lance':4,
+    'Favonius Sword':4,
+    'Favonius Warbow':4,
+    'Ferrous Shadow':3,
+    'Festering Desire':4,
+    'Fillet Blade':3,
+    'Finale Of The Deep':4,
+    'Fischl':4,
+    'Fleuve Cendre Ferryman':4,
+    'Flowing Purity':4,
+    'Forest Regalia':4,
+    'Freedom-Sworn':5,
+    'Freminet':4,
+    'Frostbearer':4,
+    'Fruit of Fulfillment':4,
+    'Furina':5,
+    'Gaming':4,
+    'Ganyu':5,
+    'Gorou':4,
+    'Hakushin Ring':4,
+    'Halberd':3,
+    'Hamayumi':4,
+    'Haran Geppaku Futsu':5,
+    'Harbinger of Dawn':3,
+    'Hu Tao':5,
+    'Hunter\'s Bow':1,
+    'Hunter\'s Path':5,
+    'Ibis Piercer':4,
+    'Iron Point':2,
+    'Iron Sting':4,
+    'Jadefall\'s Splendor':5,
+    'Jean':5,
+    'Kachina':4,
+    'Kaedehara Kazuha':5,
+    'Kaeya':4,
+    'Kagotsurube Isshin':4,
+    'Kagura\'s Verity':5,
+    'Kamisato Ayaka':5,
+    'Kamisato Ayato':5,
+    'Katsuragikiri Nagamasa':4,
+    'Kaveh':4,
+    'Keqing':5,
+    'Key of Khaj-Nisut':5,
+    'King\'s Squire':4,
+    'Kinich':5,
+    'Kirara':4,
+    'Kitain Cross Spear':4,
+    'Klee':5,
     'Kujou Sara':4,
-    "Amos\u2019 Bow":5,'Aqua Simulacra':5,'Beacon of the Reed Sea':5,'Calamity Queller':5,"Crimson Moon\u2019s Semblance":5,
-    'Elegy for the End':5,'Engulfing Lightning':5,'Everlasting Moonglow':5,'Freedom-Sworn':5,'Haran Geppaku Futsu':5,
-    "Hunter\u2019s Path":5,"Jadefall\u2019s Splendor":5,'Key of Khaj-Nisut':5,'Light of Foliar Incision':5,'Lost Prayer to the Sacred Winds':5,
-    'Mistsplitter Reforged':5,'Polar Star':5,'Primordial Jade Cutter':5,'Primordial Jade Winged-Spear':5,'Redhorn Stonethresher':5,
-    'Skyward Atlas':5,'Skyward Blade':5,'Skyward Harp':5,'Skyward Pride':5,'Skyward Spine':5,'Song of Broken Pines':5,
-    'Summit Shaper':5,'The Unforged':5,'Thundering Pulse':5,"Tulaytullah\u2019s Remembrance":5,'Vortex Vanquished':5,
-    "Wolf\u2019s Gravestone":5,'Cashflow Supervision':5,"Crane\u2019s Echoing Call":5,'Lumidouce Elegy':5,'Portent of Dawn':5,
-    'Silvershower Heartstrings':5,'Splendor of Tranquil Waters':5,"Surf\u2019s Up":5,'Symphonist of Scents':5,'Tome of the Eternal Flow':5,
-    'Uraku Misugiri':5,'Peak Patrol Song':5,'A Thousand Blazing Suns':5,'Absolution':5,'Earth Shaker':5,
-    'Dragon\u2019s Bane':4,'Eye of Perception':4,'Favonius Codex':4,'Favonius Greatsword':4,'Favonius Lance':4,'Favonius Sword':4,
-    'Favonius Warbow':4,'Festering Desire':4,"Lion\u2019s Roar":4,'Rainslasher':4,'Sacrificial Bow':4,'Sacrificial Fragments':4,
-    'Sacrificial Greatsword':4,'Sacrificial Sword':4,'The Bell':4,'The Flute':4,'The Stringless':4,'The Widsith':4,
-    'Prototype Rancour':4,'Prototype Amber':4,'Prototype Archaic':4,'Prototype Crescent':4,'Prototype Starglitter':4,
-    'Mappa Mare':4,'Iron Sting':4,'Whiteblind':4,'Compound Bow':4,'Snow-Tombed Starsilver':4,'The Viridescent Hunt':5,
+    'Kuki Shinobu':4,
+    'Layla':4,
+    'Light of Foliar Incision':5,
+    'Lion\'s Roar':4,
+    'Lisa':4,
+    'Lithic Blade':4,
+    'Lithic Spear':4,
+    'Lost Prayer to the Sacred Winds':5,
+    'Lumidouce Elegy':5,
+    'Luxurious Sea-Lord':4,
+    'Lynette':4,
+    'Lyney':5,
+    'Magic Guide':3,
+    'Mailed Flower':4,
+    'Makhaira Aquamarine':4,
+    'Mappa Mare':4,
+    'Memory of Dust':5,
+    'Messenger':3,
+    'Mika':4,
+    'Missive Windspear':4,
+    'Mistsplitter Reforged':5,
+    'Mitternachts Waltz':4,
+    'Mona':5,
+    'Moonpiercer':5,
+    'Mouun\'s Moon':4,
+    'Mualani':5,
+    'Nahida':5,
+    'Navia':5,
+    'Neuvillette':5,
+    'Nilou':5,
+    'Ningguang':4,
+    'Noelle':4,
+    'Oathsworn Eye':4,
+    'Old Merc\'s Pal':2,
+    'Otherworldly Story':3,
+    'Pocket Grimoire':2,
+    'Polar Star':5,
+    'Portable Power Saw':4,
+    'Predator':4,
+    'Primordial Jade Cutter':5,
+    'Primordial Jade Winged-Spear':5,
+    'Prospector\'s Drill':4,
+    'Prototype Amber':4,
+    'Prototype Archaic':4,
+    'Prototype Crescent':4,
+    'Prototype Rancour':4,
+    'Prototype Starglitter':4,
+    'Qiqi':5,
+    'Quartz':3,
+    'Raiden Shogun':5,
+    'Rainslasher':4,
+    'Range Gauge':4,
+    'Raven Bow':3,
+    'Razor':4,
+    'Recurve Bow':3,
+    'Redhorn Stonethresher':5,
+    'Rightful Reward':4,
+    'Rosaria':4,
+    'Royal Bow':4,
+    'Royal Greatsword':4,
+    'Royal Grimoire':4,
+    'Royal Longsword':4,
+    'Royal Spear':4,
+    'Rust':4,
+    'Sacrificial Bow':4,
+    'Sacrificial Fragments':4,
+    'Sacrificial Greatsword':4,
+    'Sacrificial Jade':4,
+    'Sacrificial Sword':4,
+    'Sangonomiya Kokomi':5,
+    'Sapwood Blade':4,
+    'Sayu':4,
+    'Scion Of The Blazing Sun':4,
+    'Seasoned Hunter\'s Bow':2,
+    'Serpent Spine':4,
+    'Sethos':4,
+    'Sharpshooter\'s Oath':3,
+    'Shenhe':5,
+    'Shikanoin Heizou':4,
+    'Sigewinne':5,
+    'Silver Sword':2,
+    'Skyrider Greatsword':3,
+    'Skyrider Sword':3,
+    'Skyward Atlas':5,
+    'Skyward Blade':5,
+    'Skyward Harp':5,
+    'Skyward Pride':5,
+    'Skyward Spine':5,
+    'Slingshot':3,
+    'Snow-Tombed Starsilver':4,
+    'Solar Pearl':4,
+    'Song Of Stillness':4,
+    'Song of Broken Pines':5,
+    'Splendor of Tranquil Waters':5,
+    'Staff of Homa':5,
+    'Sucrose':4,
+    'Summit Shaper':5,
+    'Sword of Descension':4,
+    'Sword of Narzissenkreuz':4,
+    'Talking Stick':4,
+    'Tartaglia':5,
+    'The Alley Flash':4,
+    'The Bell':4,
+    'The Black Sword':4,
+    'The Catch':4,
+    'The Dockhand\'s Assistant':4,
+    'The First Great Magic':5,
+    'The Flute':4,
+    'The Stringless':4,
+    'The Unforged':5,
+    'The Viridescent Hunt':4,
+    'The Widsith':4,
+    'Thoma':4,
+    'Thrilling Tales of Dragon Slayers':3,
+    'Thundering Pulse':5,
+    'Tidal Shadow':4,
+    'Tighnari':5,
+    'Tome of the Eternal Flow':5,
+    'Toukabou Shigure':4,
+    'Traveler':5,
+    'Traveler\'s Handy Sword':3,
+    'Tulaytullah\'s Remembrance':5,
+    'Twin Nephrite':3,
+    'Ultimate Overlord\'s Mega Magic Sword':4,
+    'Uraku Misugiri':5,
+    'Venti':5,
+    'Verdict':5,
+    'Vortex Vanquisher':5,
+    'Wanderer':5,
+    'Wandering Evenstar':4,
+    'Waster Greatsword':1,
+    'Wavebreaker\'s Fin':4,
+    'White Iron Greatsword':3,
+    'White Tassel':3,
+    'Whiteblind':4,
+    'Windblume Ode':4,
+    'Wine and Song':4,
+    'Wolf\'s Gravestone':5,
+    'Wolf-Fang':4,
+    'Wriothesley':5,
+    'Xiangling':4,
+    'Xianyun':5,
+    'Xiao':5,
+    'Xingqiu':4,
+    'Xinyan':4,
+    'Xiphos\' Moonlight':4,
+    'Yae Miko':5,
+    'Yanfei':4,
+    'Yaoyao':4,
+    'Yelan':5,
+    'Yoimiya':5,
+    'Yun Jin':4,
+    'Zhongli':5,
 };
 
 // ---------- State ----------
@@ -354,38 +602,98 @@ function getItemRarity(name) {
     return null;
 }
 async function promptUnknownRarity(name) {
+    // Already classified by the user before — use the saved override.
     if (state.userItemOverrides && Object.prototype.hasOwnProperty.call(state.userItemOverrides, name)) return state.userItemOverrides[name];
-    const result = await showModal({ title:'Unknown Item', message:`We don't recognise "<b>${escHtml(name)}</b>". Is it 4\u2605 or 5\u2605?`, type:'confirm', confirmText:'5\u2605' });
-    const rarity = (result === false) ? 4 : 5;
-    if (!state.userItemOverrides) state.userItemOverrides = {};
-    state.userItemOverrides[name] = rarity;
-    saveState();
+    // Show a custom modal with 3★ / 4★ / 5★ buttons (and a Skip option).
+    const modal = $('custom-modal');
+    const title = $('modal-title'), msg = $('modal-message'), input = $('modal-input'), custom = $('modal-custom-content');
+    const cancelB = $('modal-cancel-btn'), confirmB = $('modal-confirm-btn');
+    title.textContent = 'Unknown Item';
+    msg.innerHTML = `We don't recognise "<b>${escHtml(name)}</b>". What rarity is it?<br><span style="font-size:0.8em;color:var(--secondary-text);">Your choice is saved permanently so you won't be asked again.</span>`;
+    msg.style.display = 'block';
+    input.style.display = 'none';
+    custom.innerHTML = `<div style="display:flex;gap:10px;justify-content:center;margin-top:16px;">
+        <button class="btn btn-secondary" id="rarity-3-btn" style="flex:1;font-size:1.15em;">3\u2605</button>
+        <button class="btn btn-secondary" id="rarity-4-btn" style="flex:1;font-size:1.15em;">4\u2605</button>
+        <button class="btn btn-primary" id="rarity-5-btn" style="flex:1;font-size:1.15em;">5\u2605</button>
+    </div>`;
+    custom.style.display = 'block';
+    // Hide the default Cancel/Confirm buttons — we use the custom rarity buttons.
+    cancelB.style.display = 'none';
+    confirmB.style.display = 'none';
+    modal.classList.add('visible');
+    const rarity = await new Promise(resolve => {
+        const b3 = $('rarity-3-btn'), b4 = $('rarity-4-btn'), b5 = $('rarity-5-btn');
+        const done = (r) => { modal.classList.remove('visible'); resolve(r); };
+        b3.onclick = () => done(3);
+        b4.onclick = () => done(4);
+        b5.onclick = () => done(5);
+    });
+    // Restore the default modal buttons for future use.
+    cancelB.style.display = '';
+    confirmB.style.display = '';
+    confirmB.onclick = null; cancelB.onclick = null;
+    if (rarity) {
+        // Save permanently: to userItemOverrides (per-account state) AND to the rarity DB cache.
+        if (!state.userItemOverrides) state.userItemOverrides = {};
+        state.userItemOverrides[name] = rarity;
+        saveState();
+        try {
+            const cached = JSON.parse(localStorage.getItem(ITEM_DB_KEY) || 'null');
+            if (cached && cached.map) {
+                cached.map[name] = rarity;
+                localStorage.setItem(ITEM_DB_KEY, JSON.stringify(cached));
+            }
+        } catch(e) {}
+        itemDB[name] = rarity; // in-memory so getItemRarity() returns it immediately
+    }
     return rarity;
 }
 async function loadItemDB() {
+    // Always start from the hardcoded fallback so there's a baseline even if all APIs fail.
     itemDB = Object.assign({}, ITEM_DB_FALLBACK);
     let cached = null;
     try { cached = JSON.parse(localStorage.getItem(ITEM_DB_KEY)||'null'); } catch(e){}
-    const TTL = 24*60*60*1000;
+    // 6-hour cache: new patch characters appear without a long wait, but we don't hammer the API.
+    const TTL = 6*60*60*1000;
     if (cached && cached.fetchedAt && (Date.now()-new Date(cached.fetchedAt).getTime())<TTL && cached.map) {
         Object.assign(itemDB, cached.map); deriveStandardPool(); return;
     }
-    try {
-        const [charRes, weapRes] = await Promise.all([
-            fetch(CORS_PROXY + encodeURIComponent('https://genshin.dev/api/characters')),
-            fetch(CORS_PROXY + encodeURIComponent('https://genshin.dev/api/weapons')),
-        ]);
-        if (!charRes.ok || !weapRes.ok) throw new Error('non-200');
-        const chars = await charRes.json(), weapons = await weapRes.json();
-        const map = {};
-        const cl = Array.isArray(chars) ? chars : (chars.characters||[]);
-        cl.forEach(c => { if (typeof c==='string') { map[c]=5; } else if (c&&c.name) map[c.name]=(c.rarity===5||c.rarity==='5')?5:4; });
-        const wl = Array.isArray(weapons) ? weapons : (weapons.weapons||[]);
-        wl.forEach(w => { if (typeof w==='string') { map[w]=4; } else if (w&&w.name) map[w.name]=(w.rarity===5||w.rarity==='5')?5:4; });
-        Object.assign(itemDB, map);
-        try { localStorage.setItem(ITEM_DB_KEY, JSON.stringify({map:itemDB, fetchedAt:new Date().toISOString()})); } catch(e){}
-    } catch(e) { console.warn('Rarity DB fetch failed, using fallback.', e); }
+    // If we have a stale cache, use it immediately while refreshing in the background.
+    if (cached && cached.map) Object.assign(itemDB, cached.map);
     deriveStandardPool();
+    // Background refresh from genshin.jmp.blue (keeps DB current with every new patch).
+    try {
+        const map = {};
+        const fetchRarities = async (ids, baseUrl) => {
+            for (let i = 0; i < ids.length; i += 10) {
+                const batch = ids.slice(i, i + 10);
+                const settled = await Promise.allSettled(batch.map(id =>
+                    fetch(CORS_PROXY + encodeURIComponent(`${baseUrl}/${id}`)).then(r => r.ok ? r.json() : null)
+                ));
+                settled.forEach(s => {
+                    if (s.status === 'fulfilled' && s.value && s.value.name) {
+                        map[s.value.name] = parseInt(s.value.rarity, 10) || 4;
+                    }
+                });
+            }
+        };
+        const [charRes, weapRes] = await Promise.all([
+            fetch(CORS_PROXY + encodeURIComponent('https://genshin.jmp.blue/characters')),
+            fetch(CORS_PROXY + encodeURIComponent('https://genshin.jmp.blue/weapons')),
+        ]);
+        if (charRes.ok && weapRes.ok) {
+            const charIds = await charRes.json(), weapIds = await weapRes.json();
+            await fetchRarities(charIds, 'https://genshin.jmp.blue/characters');
+            await fetchRarities(weapIds, 'https://genshin.jmp.blue/weapons');
+            // Merge fetched data on top of the fallback (fetched takes priority).
+            Object.assign(itemDB, map);
+            try { localStorage.setItem(ITEM_DB_KEY, JSON.stringify({map:itemDB, fetchedAt:new Date().toISOString()})); } catch(e){}
+            deriveStandardPool();
+            // If the gacha view is open, re-render with the updated rarities.
+            if ($('view-gacha').classList.contains('active')) renderGachaStats();
+        }
+    } catch(e) { console.warn('Rarity DB background refresh failed, using cached/fallback.', e); }
 }
 function deriveStandardPool() {
     const pool = new Set(['Keqing','Mona','Qiqi','Diluc','Jean','Dehya','Tighnari']);
@@ -1028,13 +1336,14 @@ function parsePaimonMoe(data) {
         const gachaType = bannerKeys[bk];
         banner.pulls.forEach(p => {
             const name = paimonIdToName(p.id);
-            const rarity = getItemRarity(name) || (p.type === 'character' ? 4 : 3);
+            const rarity = getItemRarity(name);
+            // If rarity is unknown (not in DB), use '0' so checkUnknownItems prompts the user.
             wishes.push({
                 id: 'pm_' + gachaType + '_' + p.time.replace(/[^0-9]/g, '') + '_' + p.id,
                 gacha_type: gachaType,
                 name: name,
                 item_type: p.type === 'character' ? 'Character' : 'Weapon',
-                rank_type: String(rarity),
+                rank_type: rarity ? String(rarity) : '0',
                 time: p.time,
             });
         });
@@ -1077,10 +1386,14 @@ async function importWishFile(e) {
         if (!ok) return;
 
         let allWishes = (state.gachaLog && state.gachaLog.wishes) ? state.gachaLog.wishes.slice() : [];
+        // Dedup by BOTH wish ID and (gacha_type + name + time) so re-importing the same
+        // pulls from a different source (e.g. paimon.moe after a URL import) doesn't double them.
         const existingIds = new Set(allWishes.map(w => w.id));
+        const existingKeys = new Set(allWishes.map(w => `${w.gacha_type}|${w.name}|${w.time}`));
         let added = 0;
         parsed.wishes.forEach(w => {
-            if (!existingIds.has(w.id)) { allWishes.push(w); added++; }
+            const key = `${w.gacha_type}|${w.name}|${w.time}`;
+            if (!existingIds.has(w.id) && !existingKeys.has(key)) { allWishes.push(w); added++; existingKeys.add(key); }
         });
         allWishes.sort((a, b) => new Date(b.time) - new Date(a.time));
         state.gachaLog = { wishes: allWishes, lastImport: new Date().toISOString() };
@@ -1448,7 +1761,6 @@ function renderSettings() {
     const dateDisplay = state.customDate ? `Using custom date: ${state.customDate}` : 'Using real system time.';
     el.innerHTML = `<div class="single-column-view" style="max-width:560px;margin:auto;">
         <h2>Settings</h2>
-        <div class="settings-section"><h3>Back</h3><div class="controls-group" style="margin-top:0;"><button id="back-to-menu-btn" class="btn btn-secondary">Back to Menu</button></div></div>
         <div class="settings-section"><h3>Accounts</h3>
             <p style="text-align:center;color:var(--secondary-text);font-size:0.85em;margin:0 0 12px;">Each account keeps its own tasks, primos, gacha log, resin &amp; map progress. Theme is shared.</p>
             <div class="account-list">${accListHtml}</div>
@@ -1461,7 +1773,6 @@ function renderSettings() {
         <div class="settings-section"><h3>Data Backup</h3><div class="data-buttons"><button id="export-data-btn" class="btn btn-primary">Export Data</button><button id="import-data-btn" class="btn btn-secondary">Import Data</button><input type="file" id="import-data-file" accept=".json" style="display:none;"></div></div>
         <div class="settings-section"><h3>Danger Zone</h3><div class="controls-group" style="margin-top:0;"><button id="reset-all-btn" class="btn btn-clear">Clear &amp; Reset This Account</button></div></div>
     </div>`;
-    $('back-to-menu-btn').addEventListener('click', () => showView('main-menu'));
     document.querySelectorAll('.theme-chip').forEach(chip => chip.addEventListener('click', () => { const n=chip.dataset.theme; applyTheme(n, _customAccent); saveTheme(n, _customAccent); renderSettings(); }));
     const ai = $('custom-accent-input');
     if (ai) { ai.addEventListener('input', e => applyTheme(_activeTheme, e.target.value)); ai.addEventListener('change', e => { saveTheme(_activeTheme, e.target.value); renderSettings(); }); }
@@ -1542,9 +1853,14 @@ async function importData(e) {
             });
             if (!ok) return;
             let allWishes = (state.gachaLog && state.gachaLog.wishes) ? state.gachaLog.wishes.slice() : [];
+            // Dedup by BOTH wish ID and (gacha_type + name + time) so re-importing doesn't double.
             const existingIds = new Set(allWishes.map(w => w.id));
+            const existingKeys = new Set(allWishes.map(w => `${w.gacha_type}|${w.name}|${w.time}`));
             let added = 0;
-            wishParsed.wishes.forEach(w => { if (!existingIds.has(w.id)) { allWishes.push(w); added++; } });
+            wishParsed.wishes.forEach(w => {
+                const key = `${w.gacha_type}|${w.name}|${w.time}`;
+                if (!existingIds.has(w.id) && !existingKeys.has(key)) { allWishes.push(w); added++; existingKeys.add(key); }
+            });
             allWishes.sort((a, b) => new Date(b.time) - new Date(a.time));
             state.gachaLog = { wishes: allWishes, lastImport: new Date().toISOString() };
             saveState();

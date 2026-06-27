@@ -517,6 +517,8 @@ h4 { margin: 0 0 8px 0; font-size: 1em; color: var(--secondary-text); letter-spa
 
 .controls-group { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
 .settings-section { border-top: 1px solid var(--border-color); margin-top: 24px; padding-top: 20px; }
+/* First section after the <h2> doesn't need a top border (the h2 already has a bottom border). */
+.settings-section:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
 .settings-section h3 { margin-top: 0; text-align: center; letter-spacing: 0.5px; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .settings-row label { color: var(--secondary-text); font-size: 0.95em; }
