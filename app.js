@@ -12,6 +12,9 @@ const OLD_STORAGE_KEY = 'genshinTrackerData_v2_stable';
 const ITEM_DB_KEY     = 'genshinItemDB_v1';
 const MAP_DATA_KEY    = 'genshinMapData_v1';
 const THEME_KEY       = 'genshinTheme_v1';
+const ACCOUNTS_KEY    = 'genshinAccounts_v1';   // { activeId, list: [{id, name}] }
+// Each account's data lives under DATA_PREFIX + accountId.
+const DATA_PREFIX     = 'genshinTrackerData_v3_acc_';
 // CORS proxies — corsproxy.io first (matches the original working script),
 // with fallbacks for when it rate-limits or returns 403.
 const CORS_PROXIES = [
@@ -92,7 +95,7 @@ const ITEM_DB_FALLBACK = {
 
 // ---------- State ----------
 let state, itemDB = {}, _standardPool = new Set(), _mapData = null;
-let _activeTheme = 'Anemo', _customAccent = null, _editMode = false;
+let _activeTheme = 'Anemo', _customAccent = null, _editMode = false, _gachaSort = 'newest';
 let _viewAnimating = false, _resinInterval = null;
 
 function defaultPityState() {
@@ -167,9 +170,90 @@ function mergeDefaults(parsed) {
     return merged;
 }
 
+// ---------- Accounts (multi-account support) ----------
+function getAccountsIndex() {
+    try {
+        const raw = localStorage.getItem(ACCOUNTS_KEY);
+        if (raw) return JSON.parse(raw);
+    } catch(e){}
+    // First run: migrate any existing v3 data into a default "Main" account.
+    return null;
+}
+function saveAccountsIndex(idx) {
+    try { localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(idx)); } catch(e){}
+}
+function getActiveAccountId() {
+    let idx = getAccountsIndex();
+    if (idx && idx.activeId) return idx.activeId;
+    // Bootstrap: create a default "Main" account and migrate existing data.
+    const id = 'main';
+    const oldData = localStorage.getItem(STORAGE_KEY);
+    if (oldData) {
+        localStorage.setItem(DATA_PREFIX + id, oldData);
+        localStorage.removeItem(STORAGE_KEY);
+    }
+    idx = { activeId: id, list: [{ id, name: 'Main' }] };
+    saveAccountsIndex(idx);
+    return id;
+}
+function getActiveAccountName() {
+    const idx = getAccountsIndex();
+    const id = idx ? idx.activeId : getActiveAccountId();
+    if (idx) {
+        const acc = idx.list.find(a => a.id === id);
+        if (acc) return acc.name;
+    }
+    return 'Main';
+}
+function accountDataKey() { return DATA_PREFIX + getActiveAccountId(); }
+
+// Switch to a different account (loads its state, re-renders everything).
+function switchAccount(accountId) {
+    const idx = getAccountsIndex(); if (!idx) return;
+    if (!idx.list.find(a => a.id === accountId)) return;
+    idx.activeId = accountId;
+    saveAccountsIndex(idx);
+    loadState();
+    deriveStandardPool();
+    recomputePityState();
+    renderAll();
+    renderAccountPill();
+}
+function createAccount(name) {
+    const idx = getAccountsIndex() || { activeId: 'main', list: [{id:'main', name:'Main'}] };
+    const id = 'acc_' + Date.now();
+    idx.list.push({ id, name: name || ('Account ' + (idx.list.length + 1)) });
+    saveAccountsIndex(idx);
+    // Initialise this account with a fresh default state.
+    const fresh = getDefaultState();
+    try { localStorage.setItem(DATA_PREFIX + id, JSON.stringify(fresh)); } catch(e){}
+    switchAccount(id);
+}
+function renameAccount(accountId, newName) {
+    const idx = getAccountsIndex(); if (!idx) return;
+    const acc = idx.list.find(a => a.id === accountId);
+    if (acc) { acc.name = newName || acc.name; saveAccountsIndex(idx); renderAccountPill(); }
+}
+async function deleteAccount(accountId) {
+    const idx = getAccountsIndex(); if (!idx) return;
+    if (idx.list.length <= 1) { await showModal({type:'alert',title:'Cannot Delete',message:'You must have at least one account.',confirmText:'OK'}); return; }
+    const ok = await showModal({title:'Delete Account',message:'This permanently deletes this account and all its data. Continue?',type:'confirm'});
+    if (!ok) return;
+    idx.list = idx.list.filter(a => a.id !== accountId);
+    try { localStorage.removeItem(DATA_PREFIX + accountId); } catch(e){}
+    if (idx.activeId === accountId) idx.activeId = idx.list[0].id;
+    saveAccountsIndex(idx);
+    loadState();
+    deriveStandardPool();
+    recomputePityState();
+    renderAll();
+    renderAccountPill();
+}
+
 function loadState() {
+    const key = accountDataKey();
     let migrated = false;
-    const savedV3 = localStorage.getItem(STORAGE_KEY);
+    const savedV3 = localStorage.getItem(key);
     if (savedV3) {
         try { state = mergeDefaults(JSON.parse(savedV3)); if (!JSON.parse(savedV3).stateVersion || JSON.parse(savedV3).stateVersion < STATE_VERSION) migrated = true; }
         catch(e) { state = getDefaultState(); }
@@ -182,7 +266,7 @@ function loadState() {
     }
     if (migrated) saveState();
 }
-function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {} }
+function saveState() { try { localStorage.setItem(accountDataKey(), JSON.stringify(state)); } catch(e) {} }
 
 // ---------- Helpers ----------
 const $ = (id) => document.getElementById(id);
@@ -239,6 +323,91 @@ function loadTheme() {
     applyTheme(t, ca);
 }
 function saveTheme(t, ca) { try { localStorage.setItem(THEME_KEY, JSON.stringify({theme:t, customAccent:ca||null})); } catch(e){} }
+
+// ---------- Floating theme switcher (bottom-right popover) ----------
+function buildThemePopover() {
+    const grid = $('theme-popover-grid'); if (!grid) return;
+    grid.innerHTML = Object.keys(THEMES).map(name => {
+        const sel = name === _activeTheme ? 'selected' : '';
+        return `<div class="theme-popover-chip ${sel}" data-theme="${name}" title="${name}">
+            <span class="theme-popover-swatch" style="background:${THEMES[name].accent}"></span>
+            <span class="theme-popover-name">${name}</span>
+        </div>`;
+    }).join('');
+    grid.querySelectorAll('.theme-popover-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const name = chip.dataset.theme;
+            applyTheme(name, _customAccent);
+            saveTheme(name, _customAccent);
+            syncThemePopover();
+            syncSettingsThemePicker();
+        });
+    });
+    const accentInput = $('theme-popover-accent');
+    if (accentInput) {
+        accentInput.value = _customAccent || THEMES[_activeTheme].accent;
+        accentInput.addEventListener('input', e => applyTheme(_activeTheme, e.target.value));
+        accentInput.addEventListener('change', e => { saveTheme(_activeTheme, e.target.value); syncThemePopover(); syncSettingsThemePicker(); });
+    }
+    const resetBtn = $('theme-popover-reset');
+    if (resetBtn) resetBtn.addEventListener('click', () => {
+        _customAccent = null;
+        applyTheme(_activeTheme, null);
+        saveTheme(_activeTheme, null);
+        syncThemePopover();
+        syncSettingsThemePicker();
+    });
+}
+function syncThemePopover() {
+    // update selected states + accent dot
+    document.querySelectorAll('.theme-popover-chip').forEach(chip => {
+        chip.classList.toggle('selected', chip.dataset.theme === _activeTheme);
+    });
+    const dot = $('theme-fab-dot');
+    if (dot) dot.style.background = _customAccent || THEMES[_activeTheme].accent;
+    const accentInput = $('theme-popover-accent');
+    if (accentInput) accentInput.value = _customAccent || THEMES[_activeTheme].accent;
+}
+function syncSettingsThemePicker() {
+    // if the Settings view is open, refresh its theme chips too
+    if ($('view-settings').classList.contains('active')) renderSettings();
+}
+function initThemeFab() {
+    const fab = $('theme-fab'), pop = $('theme-popover');
+    if (!fab || !pop) return;
+    buildThemePopover();
+    syncThemePopover();
+    fab.addEventListener('click', (e) => {
+        e.stopPropagation();
+        pop.classList.toggle('visible');
+    });
+    // Close popover when clicking outside it
+    document.addEventListener('click', (e) => {
+        if (!pop.contains(e.target) && e.target !== fab && !fab.contains(e.target)) {
+            pop.classList.remove('visible');
+        }
+    });
+}
+
+// ---------- Account pill (header) ----------
+function renderAccountPill() {
+    const name = getActiveAccountName();
+    const el = $('header-account-name');
+    if (el) el.textContent = name;
+    const pill = $('header-account-pill');
+    if (pill) {
+        // Update tooltip to show account count
+        const idx = getAccountsIndex();
+        const count = idx ? idx.list.length : 1;
+        pill.title = `${name} (${count} account${count===1?'':'s'}) — click to switch`;
+    }
+}
+function initAccountPill() {
+    const pill = $('header-account-pill');
+    if (!pill) return;
+    pill.addEventListener('click', () => showView('view-settings'));
+    renderAccountPill();
+}
 
 // ---------- Rarity DB ----------
 function getItemRarity(name) {
@@ -557,6 +726,51 @@ async function handleEventTaskClick(type, index) {
 // ---------- Gacha ----------
 const PS_SCRIPT = `Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex "&{$((New-Object System.Net.WebClient).DownloadString('https://gist.githubusercontent.com/Tuvakar/5433a3d7cd9f563e43a71ab574dd25e1/raw/getlink-genshintool.ps1'))} global"`;
 
+// Sort modes for the 5★ pull list.
+const GACHA_SORT_OPTIONS = [
+    { id: 'newest',  label: 'Newest first' },
+    { id: 'oldest',  label: 'Oldest first' },
+    { id: 'pity-hi', label: 'Pity: High \u2192 Low' },
+    { id: 'pity-lo', label: 'Pity: Low \u2192 High' },
+    { id: 'wins',    label: 'Wins first' },
+    { id: 'losses',  label: 'Losses first' },
+    { id: 'name',    label: 'Name (A\u2013Z)' },
+];
+
+// Returns a NEW sorted array (does not mutate the input).
+function sortPulls(list, mode) {
+    const arr = list.slice();
+    switch (mode) {
+        case 'oldest':  return arr.sort((a,b) => new Date(a.time) - new Date(b.time));
+        case 'newest':  return arr.sort((a,b) => new Date(b.time) - new Date(a.time));
+        case 'pity-hi': return arr.sort((a,b) => b.pity - a.pity);
+        case 'pity-lo': return arr.sort((a,b) => a.pity - b.pity);
+        case 'wins':    return arr.sort((a,b) => (a.win===b.win)?0:(a.win?-1:1));
+        case 'losses':  return arr.sort((a,b) => (a.win===b.win)?0:(a.win?1:-1));
+        case 'name':    return arr.sort((a,b) => a.name.localeCompare(b.name));
+        default:        return arr;
+    }
+}
+
+// Re-render only the pulls container for one banner card (keeps the sort dropdown stable).
+function rerenderPulls(bannerId) {
+    const cfg = BANNERS.find(b => b.id === bannerId); if (!cfg) return;
+    const allWishes = (state.gachaLog && state.gachaLog.wishes) ? state.gachaLog.wishes : [];
+    const bw = allWishes.filter(w => w.gacha_type === bannerId);
+    const s = analyzeBannerData(bw, cfg); if (!s) return;
+    const wrap = document.querySelector(`[data-pulls-banner="${bannerId}"]`);
+    if (!wrap) return;
+    const pityCls = p => p>=74?'pity-high':p<=20?'pity-low':'pity-mid';
+    const sorted = sortPulls(s.five.list, _gachaSort);
+    wrap.innerHTML = sorted.map(p => {
+        const rarity = getItemRarity(p.name) || 5;
+        const rarityTag = rarity === 5 ? '<span class="pull-rarity gold">5\u2605</span>' : '<span class="pull-rarity">5\u2605?</span>';
+        const winTag = p.win===true ? '<span class="pull-tag win">WIN</span>' : (p.win===false ? '<span class="pull-tag loss">LOSS</span>' : '');
+        const date = p.time ? new Date(p.time).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) : '';
+        return `<div class="gacha-pull ${p.win?'win':'loss'}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${winTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`;
+    }).join('');
+}
+
 function renderGachaStats() {
     const view = $('view-gacha'); if (!view) return;
     const psEsc = PS_SCRIPT.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -626,7 +840,16 @@ function renderGachaStats() {
         }
         details += '</div>';
         if (s.five.list.length>0) {
-            details += `<div class="gacha-pulls-container">${s.five.list.map(p => `<div class="gacha-pull ${p.win?'win':'loss'}"><span>${escHtml(p.name)}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`).join('')}</div>`;
+            const opts = GACHA_SORT_OPTIONS.map(o => `<option value="${o.id}" ${o.id===_gachaSort?'selected':''}>${o.label}</option>`).join('');
+            const sorted = sortPulls(s.five.list, _gachaSort);
+            const pullsHtml = sorted.map(p => {
+                const rarity = getItemRarity(p.name) || 5;
+                const rarityTag = rarity === 5 ? '<span class="pull-rarity gold">5\u2605</span>' : '<span class="pull-rarity">5\u2605?</span>';
+                const winTag = p.win===true ? '<span class="pull-tag win">WIN</span>' : (p.win===false ? '<span class="pull-tag loss">LOSS</span>' : '');
+                const date = p.time ? new Date(p.time).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) : '';
+                return `<div class="gacha-pull ${p.win?'win':'loss'}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${winTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`;
+            }).join('');
+            details += `<div class="gacha-pulls-header"><label class="pull-sort-label">Sort 5\u2605 pulls: <select class="pull-sort" data-banner="${cfg.id}">${opts}</select></label><span class="pull-count-text">${s.five.list.length} total</span></div><div class="gacha-pulls-container" data-pulls-banner="${cfg.id}">${pullsHtml}</div>`;
         }
         let guarLine = `Guaranteed at ${cfg.hardPity5}`;
         if (cfg.type==='character') guarLine = s.pity.guaranteed ? 'Next 5\u2605 guaranteed featured' : '50/50 active';
@@ -650,6 +873,15 @@ function renderGachaStats() {
     });
     html += '</div>';
     container.innerHTML = html;
+    // Bind sort dropdowns — re-render only that banner's pulls (in-place, no full rebuild).
+    container.querySelectorAll('.pull-sort').forEach(sel => {
+        sel.addEventListener('change', (e) => {
+            _gachaSort = e.target.value;
+            // update all sort dropdowns to stay in sync across banners
+            container.querySelectorAll('.pull-sort').forEach(s => { if (s !== e.target) s.value = _gachaSort; });
+            BANNERS.forEach(b => rerenderPulls(b.id));
+        });
+    });
 }
 function emptyBannerCard(cfg) {
     const note = cfg.type==='chronicled'?'Every 5\u2605 guaranteed featured':'No pulls yet';
@@ -1047,22 +1279,40 @@ function renderSettings() {
     Object.keys(THEMES).forEach(name => {
         chips += `<div class="theme-chip ${name===theme?'selected':''}" data-theme="${name}" title="${name}"><span class="theme-chip-swatch" style="background:${THEMES[name].accent}"></span><span class="theme-chip-name">${name}</span></div>`;
     });
+    // Accounts list
+    const idx = getAccountsIndex() || { activeId:'main', list:[{id:'main', name:'Main'}] };
+    const activeId = idx.activeId;
+    const accListHtml = idx.list.map(a => {
+        const active = a.id === activeId;
+        return `<div class="account-row ${active?'active':''}" data-acc="${a.id}">
+            <button class="account-name-btn" data-switch="${a.id}" title="Switch to this account">${escHtml(a.name)}${active?' <span class="account-badge">active</span>':''}</button>
+            <span class="account-actions">
+                <button class="btn-icon" data-rename="${a.id}" title="Rename">${pencilSvg()}</button>
+                <button class="btn-icon" data-delete="${a.id}" title="Delete">${trashSvg()}</button>
+            </span>
+        </div>`;
+    }).join('');
     const dateDisplay = state.customDate ? `Using custom date: ${state.customDate}` : 'Using real system time.';
     el.innerHTML = `<div class="single-column-view" style="max-width:560px;margin:auto;">
         <h2>Settings</h2>
         <div class="settings-section"><h3>Back</h3><div class="controls-group" style="margin-top:0;"><button id="back-to-menu-btn" class="btn btn-secondary">Back to Menu</button></div></div>
+        <div class="settings-section"><h3>Accounts</h3>
+            <p style="text-align:center;color:var(--secondary-text);font-size:0.85em;margin:0 0 12px;">Each account keeps its own tasks, primos, gacha log, resin &amp; map progress. Theme is shared.</p>
+            <div class="account-list">${accListHtml}</div>
+            <div class="controls-group" style="margin-top:12px;"><button id="add-account-btn" class="btn btn-primary">+ Add Account</button></div>
+        </div>
         <div class="settings-section"><h3>Theme</h3><div class="theme-grid">${chips}</div>
             <div class="custom-accent-row"><label for="custom-accent-input">Custom accent:</label><input type="color" id="custom-accent-input" value="${customAccent || THEMES[theme].accent}">${customAccent?'<button class="btn-icon" id="reset-accent-btn" title="Reset to theme accent">Reset</button>':''}</div></div>
         <div class="settings-section"><h3>General Resets</h3><div class="controls-group" style="margin-top:0;"><button id="manual-reset-btn" class="btn btn-secondary">Perform Daily Task Reset</button><button id="reset-primo-btn" class="btn btn-secondary">Reset Primogem Count</button></div></div>
         <div class="settings-section"><h3>Date Override</h3><p id="custom-date-display" style="text-align:center;color:var(--secondary-text);margin-bottom:10px;">${dateDisplay}</p><div class="controls-group" style="margin-top:0;"><button id="set-date-btn" class="btn btn-secondary">Set Custom Date</button><button id="sync-date-btn" class="btn btn-secondary" style="display:${state.customDate?'block':'none'};">Sync to Today</button></div></div>
         <div class="settings-section"><h3>Data Backup</h3><div class="data-buttons"><button id="export-data-btn" class="btn btn-primary">Export Data</button><button id="import-data-btn" class="btn btn-secondary">Import Data</button><input type="file" id="import-data-file" accept=".json" style="display:none;"></div></div>
-        <div class="settings-section"><h3>Danger Zone</h3><div class="controls-group" style="margin-top:0;"><button id="reset-all-btn" class="btn btn-clear">Clear &amp; Reset All Data</button></div></div>
+        <div class="settings-section"><h3>Danger Zone</h3><div class="controls-group" style="margin-top:0;"><button id="reset-all-btn" class="btn btn-clear">Clear &amp; Reset This Account</button></div></div>
     </div>`;
     $('back-to-menu-btn').addEventListener('click', () => showView('main-menu'));
-    document.querySelectorAll('.theme-chip').forEach(chip => chip.addEventListener('click', () => { const n=chip.dataset.theme; applyTheme(n, _customAccent); saveTheme(n, _customAccent); renderSettings(); }));
+    document.querySelectorAll('.theme-chip').forEach(chip => chip.addEventListener('click', () => { const n=chip.dataset.theme; applyTheme(n, _customAccent); saveTheme(n, _customAccent); renderSettings(); syncThemePopover(); }));
     const ai = $('custom-accent-input');
-    if (ai) { ai.addEventListener('input', e => applyTheme(_activeTheme, e.target.value)); ai.addEventListener('change', e => { saveTheme(_activeTheme, e.target.value); renderSettings(); }); }
-    const ra = $('reset-accent-btn'); if (ra) ra.addEventListener('click', () => { _customAccent=null; applyTheme(_activeTheme, null); saveTheme(_activeTheme, null); renderSettings(); });
+    if (ai) { ai.addEventListener('input', e => applyTheme(_activeTheme, e.target.value)); ai.addEventListener('change', e => { saveTheme(_activeTheme, e.target.value); renderSettings(); syncThemePopover(); }); }
+    const ra = $('reset-accent-btn'); if (ra) ra.addEventListener('click', () => { _customAccent=null; applyTheme(_activeTheme, null); saveTheme(_activeTheme, null); renderSettings(); syncThemePopover(); });
     $('manual-reset-btn').addEventListener('click', () => performDailyReset(false));
     $('reset-primo-btn').addEventListener('click', async () => { if (await showModal({title:'Confirm Primogem Reset',message:'This will reset your Primogem count to 0. This cannot be undone.',type:'confirm'})) { state.primogemCount=0; saveState(); renderPrimos(); renderStatusBar(); } });
     $('set-date-btn').addEventListener('click', async () => {
@@ -1070,7 +1320,35 @@ function renderSettings() {
         if (ok) { const v=$('custom-date-input-modal').value; if (v) { state.customDate=v; saveState(); renderAll(); checkForAutomaticResets(); } }
     });
     $('sync-date-btn').addEventListener('click', () => { state.customDate=null; saveState(); renderAll(); checkForAutomaticResets(); });
-    $('reset-all-btn').addEventListener('click', async () => { if (await showModal({title:'Confirm Total Reset',message:'This will delete all saved data. This cannot be undone.',type:'confirm'})) { localStorage.removeItem(STORAGE_KEY); localStorage.removeItem(OLD_STORAGE_KEY); localStorage.removeItem(ITEM_DB_KEY); localStorage.removeItem(MAP_DATA_KEY); localStorage.removeItem(THEME_KEY); location.reload(); } });
+    // Account buttons
+    $('add-account-btn').addEventListener('click', async () => {
+        const v = await showModal({type:'prompt',title:'New Account',message:'Name this account (e.g. "Alt", "Asia server"):',placeholder:'Account name',defaultValue:'Alt'});
+        if (v === false || !v) return;
+        createAccount(v.trim());
+    });
+    document.querySelectorAll('button[data-switch]').forEach(b => b.addEventListener('click', () => switchAccount(b.dataset.switch)));
+    document.querySelectorAll('button[data-rename]').forEach(b => b.addEventListener('click', async () => {
+        const id = b.dataset.rename;
+        const idx2 = getAccountsIndex();
+        const acc = idx2.list.find(a => a.id === id);
+        const v = await showModal({type:'prompt',title:'Rename Account',defaultValue:acc ? acc.name : '',placeholder:'Account name'});
+        if (v === false || !v) return;
+        renameAccount(id, v.trim());
+        renderSettings();
+    }));
+    document.querySelectorAll('button[data-delete]').forEach(b => b.addEventListener('click', () => deleteAccount(b.dataset.delete)));
+    // Reset only the active account (not all accounts / not theme).
+    $('reset-all-btn').addEventListener('click', async () => {
+        const accName = getActiveAccountName();
+        if (await showModal({title:'Confirm Reset',message:`This will delete ALL data for the "${accName}" account (tasks, primos, gacha log, resin, map progress). This cannot be undone. Continue?`,type:'confirm'})) {
+            state = getDefaultState();
+            saveState();
+            deriveStandardPool();
+            recomputePityState();
+            renderAll();
+            await showModal({type:'alert',title:'Reset Complete',message:`The "${accName}" account has been reset.`,confirmText:'OK'});
+        }
+    });
     $('export-data-btn').addEventListener('click', exportData);
     $('import-data-btn').addEventListener('click', () => $('import-data-file').click());
     $('import-data-file').addEventListener('change', importData);
@@ -1169,6 +1447,8 @@ function bindGlobalEvents() {
 async function init() {
     $('custom-modal').innerHTML = `<div class="modal-content"><h3 id="modal-title"></h3><p id="modal-message"></p><div id="modal-custom-content"></div><input type="text" id="modal-input" class="modal-input" style="display:none;"><div class="modal-buttons"><button id="modal-cancel-btn" class="btn btn-secondary">Cancel</button><button id="modal-confirm-btn" class="btn btn-primary">Confirm</button></div></div>`;
     loadTheme();
+    initThemeFab();
+    initAccountPill();
     loadState();
     await loadItemDB();
     deriveStandardPool();
