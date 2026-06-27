@@ -645,6 +645,8 @@ body[data-edit-weekly="true"] #weekly-add-row { display: flex; }
 .pull-tag { font-size: 0.7em; font-weight: 700; letter-spacing: 0.5px; padding: 1px 5px; border-radius: 8px; }
 .pull-tag.win { background: rgba(240, 185, 11, 0.25); color: var(--gold); }
 .pull-tag.loss { background: rgba(237, 66, 69, 0.25); color: var(--red); }
+.pull-tag.guarantee { background: rgba(78, 205, 196, 0.25); color: var(--accent); }
+.gacha-pull.guarantee { border-color: var(--accent); }
 .pull-date { font-size: 0.72em; color: var(--secondary-text); font-variant-numeric: tabular-nums; }
 .pity-value { font-weight: bold; font-variant-numeric: tabular-nums; }
 .pity-value.pity-high { color: var(--red); }

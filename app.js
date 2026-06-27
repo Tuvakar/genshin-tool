@@ -40,13 +40,15 @@ const THEMES = {
 
 const BANNERS = [
     { id:'301', name:'Character Event',  type:'character',  hardPity5:90, softPity5:74, hardPity4:10, has5050:true,  hasFatePoints:false },
-    { id:'302', name:'Weapon Event',     type:'weapon',     hardPity5:80, softPity5:63, hardPity4:10, has5050:false, hasFatePoints:true  },
+    { id:'400', name:'Character Event 2',type:'character',  hardPity5:90, softPity5:74, hardPity4:10, has5050:true,  hasFatePoints:false },
+    { id:'302', name:'Weapon Event',     type:'weapon',     hardPity5:80, softPity5:63, hardPity4:10, has5050:true,  hasFatePoints:false },
     { id:'200', name:'Standard',         type:'standard',   hardPity5:90, softPity5:74, hardPity4:10, has5050:false, hasFatePoints:false },
     { id:'500', name:'Chronicled Wish',  type:'chronicled', hardPity5:90, softPity5:74, hardPity4:10, has5050:false, hasFatePoints:false },
 ];
 
 const IMPORT_BANNER_TYPES = [
     { id:'301', name:'Character Event' },
+    { id:'400', name:'Character Event 2' },
     { id:'302', name:'Weapon Event' },
     { id:'200', name:'Standard' },
     { id:'500', name:'Chronicled Wish' },
@@ -349,7 +351,8 @@ let _viewAnimating = false, _resinInterval = null;
 function defaultPityState() {
     return {
         '301': { current5:0, current4:0, guaranteed:false },
-        '302': { current5:0, current4:0, fatePoints:0 },
+        '400': { current5:0, current4:0, guaranteed:false },
+        '302': { current5:0, current4:0, guaranteed:false },
         '200': { current5:0, current4:0 },
         '500': { current5:0, current4:0 },
     };
@@ -717,18 +720,25 @@ function analyzeBannerData(wishes, cfg) {
     oldToNew.forEach(w => {
         p5++; p4++;
         const rarity = getItemRarity(w.name) || parseInt(w.rank_type, 10);
-        const pd = { name:w.name, pity:p5, win:null, fatePoints:null, inSoftPity: p5>=cfg.softPity5, time:w.time, item_type:w.item_type, rank_type:w.rank_type };
+        const pd = { name:w.name, pity:p5, win:null, outcome:null, fatePoints:null, inSoftPity: p5>=cfg.softPity5, time:w.time, item_type:w.item_type, rank_type:w.rank_type };
         if (rarity===5) {
-            if (cfg.type==='character') {
+            if (cfg.type==='character' || cfg.type==='weapon') {
+                // Both character and weapon banners now use 50/50 with guarantee:
+                // lose the 50/50 -> next 5★ is guaranteed featured.
                 const isLoss = isStandardFiveStar(w.name);
-                if (guaranteed) { pd.win=true; guaranteed=false; }
-                else if (isLoss) { pd.win=false; guaranteed=true; }
-                else { pd.win=true; }
-            } else if (cfg.type==='weapon') {
-                if (fatePoints>=2) { pd.win=true; fatePoints=0; }
-                else { pd.win=false; fatePoints=Math.min(fatePoints+1,2); }
-                pd.fatePoints = fatePoints;
-            } else { pd.win=true; }
+                if (guaranteed) {
+                    pd.win = true;
+                    pd.outcome = 'guarantee';  // got the featured because previous was a loss
+                    guaranteed = false;
+                } else if (isLoss) {
+                    pd.win = false;
+                    pd.outcome = 'loss';
+                    guaranteed = true;
+                } else {
+                    pd.win = true;
+                    pd.outcome = 'win';
+                }
+            } else { pd.win=true; pd.outcome='win'; }
             fives.push(pd); p5=0;
         }
         if (rarity===4) { fours.push(Object.assign({}, w, {pity:p4})); p4=0; }
@@ -737,10 +747,13 @@ function analyzeBannerData(wishes, cfg) {
     const avg = a => a.length ? a.reduce((s,i)=>s+i.pity,0)/a.length : 0;
     let f4c=[], f4w=[];
     if (cfg.type==='character') fours.forEach(s => { if (s.item_type==='Character') f4c.push(s); else f4w.push(s); });
-    const wins = fives.filter(s=>s.win).length, losses = fives.filter(s=>!s.win).length;
+    // Count outcomes: win (won 50/50), loss (lost 50/50), guarantee (got featured because previous was a loss).
+    const wins = fives.filter(s=>s.outcome==='win').length;
+    const losses = fives.filter(s=>s.outcome==='loss').length;
+    const guarantees = fives.filter(s=>s.outcome==='guarantee').length;
     return {
         totalWishes: wishes.length,
-        five: { list:fives.slice().reverse(), total:fives.length, avgPity:avg(fives), percent:(fives.length/wishes.length)*100, wins, losses, winRate:(wins+losses)>0?(wins/(wins+losses))*100:0 },
+        five: { list:fives.slice().reverse(), total:fives.length, avgPity:avg(fives), percent:(fives.length/wishes.length)*100, wins, losses, guarantees, winRate:(wins+losses+guarantees)>0?((wins+guarantees)/(wins+losses+guarantees))*100:0 },
         four: { list:fours.slice().reverse(), total:fours.length, avgPity:avg(fours), percent:(fours.length/wishes.length)*100, chars:{total:f4c.length,avgPity:avg(f4c),percent:(f4c.length/wishes.length)*100}, weapons:{total:f4w.length,avgPity:avg(f4w),percent:(f4w.length/wishes.length)*100} },
         three: { total: threes.length, percent: (threes.length/wishes.length)*100, list: threes.slice().reverse() },
         pity: { current5:p5, current4:p4, guaranteed, fatePoints },
@@ -753,12 +766,10 @@ function recomputePityState() {
         const bw = wishes.filter(w => w.gacha_type===b.id);
         const s = analyzeBannerData(bw, b);
         if (s) {
-            if (b.type==='character') next[b.id]={current5:s.pity.current5,current4:s.pity.current4,guaranteed:s.pity.guaranteed};
-            else if (b.type==='weapon') next[b.id]={current5:s.pity.current5,current4:s.pity.current4,fatePoints:s.pity.fatePoints};
+            if (b.type==='character' || b.type==='weapon') next[b.id]={current5:s.pity.current5,current4:s.pity.current4,guaranteed:s.pity.guaranteed};
             else next[b.id]={current5:s.pity.current5,current4:s.pity.current4};
         } else {
-            if (b.type==='character') next[b.id]={current5:0,current4:0,guaranteed:false};
-            else if (b.type==='weapon') next[b.id]={current5:0,current4:0,fatePoints:0};
+            if (b.type==='character' || b.type==='weapon') next[b.id]={current5:0,current4:0,guaranteed:false};
             else next[b.id]={current5:0,current4:0};
         }
     });
@@ -1003,13 +1014,14 @@ const PS_SCRIPT = `Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net
 
 // Sort modes for the 5★ pull list.
 const GACHA_SORT_OPTIONS = [
-    { id: 'newest',  label: 'Newest first' },
-    { id: 'oldest',  label: 'Oldest first' },
-    { id: 'pity-hi', label: 'Pity: High \u2192 Low' },
-    { id: 'pity-lo', label: 'Pity: Low \u2192 High' },
-    { id: 'wins',    label: 'Wins first' },
-    { id: 'losses',  label: 'Losses first' },
-    { id: 'name',    label: 'Name (A\u2013Z)' },
+    { id: 'newest',     label: 'Newest first' },
+    { id: 'oldest',     label: 'Oldest first' },
+    { id: 'pity-hi',    label: 'Pity: High \u2192 Low' },
+    { id: 'pity-lo',    label: 'Pity: Low \u2192 High' },
+    { id: 'wins',       label: 'Wins first' },
+    { id: 'losses',     label: 'Losses first' },
+    { id: 'guarantees', label: 'Guarantees first' },
+    { id: 'name',       label: 'Name (A\u2013Z)' },
 ];
 
 // Returns a NEW sorted array (does not mutate the input).
@@ -1020,8 +1032,9 @@ function sortPulls(list, mode) {
         case 'newest':  return arr.sort((a,b) => new Date(b.time) - new Date(a.time));
         case 'pity-hi': return arr.sort((a,b) => b.pity - a.pity);
         case 'pity-lo': return arr.sort((a,b) => a.pity - b.pity);
-        case 'wins':    return arr.sort((a,b) => (a.win===b.win)?0:(a.win?-1:1));
-        case 'losses':  return arr.sort((a,b) => (a.win===b.win)?0:(a.win?1:-1));
+        case 'wins':    return arr.sort((a,b) => (a.outcome===b.outcome)?0:(a.outcome==='win'?-1:1));
+        case 'losses':  return arr.sort((a,b) => (a.outcome===b.outcome)?0:(a.outcome==='loss'?-1:1));
+        case 'guarantees': return arr.sort((a,b) => (a.outcome===b.outcome)?0:(a.outcome==='guarantee'?-1:1));
         case 'name':    return arr.sort((a,b) => a.name.localeCompare(b.name));
         default:        return arr;
     }
@@ -1040,9 +1053,15 @@ function rerenderPulls(bannerId) {
     wrap.innerHTML = sorted.map(p => {
         const rarity = getItemRarity(p.name) || 5;
         const rarityTag = rarity === 5 ? '<span class="pull-rarity gold">5\u2605</span>' : '<span class="pull-rarity">5\u2605?</span>';
-        const winTag = p.win===true ? '<span class="pull-tag win">WIN</span>' : (p.win===false ? '<span class="pull-tag loss">LOSS</span>' : '');
+        let outcomeTag = '';
+        let pullCls = p.win ? 'win' : 'loss';
+        if (p.outcome === 'win') { outcomeTag = '<span class="pull-tag win">WIN</span>'; }
+        else if (p.outcome === 'loss') { outcomeTag = '<span class="pull-tag loss">LOSS</span>'; }
+        else if (p.outcome === 'guarantee') { outcomeTag = '<span class="pull-tag guarantee">GUARANTEE</span>'; pullCls = 'win'; }
+        else if (p.win===true) { outcomeTag = '<span class="pull-tag win">WIN</span>'; }
+        else if (p.win===false) { outcomeTag = '<span class="pull-tag loss">LOSS</span>'; }
         const date = p.time ? new Date(p.time).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) : '';
-        return `<div class="gacha-pull ${p.win?'win':'loss'}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${winTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`;
+        return `<div class="gacha-pull ${pullCls}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${outcomeTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`;
     }).join('');
 }
 
@@ -1115,7 +1134,11 @@ function renderGachaStats() {
         let details = '<div class="gacha-details-grid">';
         details += `<div class="gacha-grid-header"></div><div class="gacha-grid-header">Total</div><div class="gacha-grid-header">Percent</div><div class="gacha-grid-header">Pity AVG</div>`;
         details += `<div class="gacha-grid-label" style="color:var(--gold)">5 \u2605</div><div class="gacha-grid-value gold">${s.five.total}</div><div class="gacha-grid-value">${f(s.five.percent,2)}%</div><div class="gacha-grid-value gold">${f(s.five.avgPity,1)}</div>`;
-        if (cfg.type==='character' && s.five.total>0) details += `<div class="gacha-grid-label indented">\u21B3 Win 50/50</div><div class="gacha-grid-value">${s.five.wins}</div><div class="gacha-grid-value">${f(s.five.winRate,1)}%</div><div class="gacha-grid-value">-</div>`;
+        if ((cfg.type==='character' || cfg.type==='weapon') && s.five.total>0) {
+            details += `<div class="gacha-grid-label indented">\u21B3 Win 50/50</div><div class="gacha-grid-value">${s.five.wins}</div><div class="gacha-grid-value">${f(s.five.total>0?(s.five.wins/s.five.total)*100:0,1)}%</div><div class="gacha-grid-value">-</div>`;
+            details += `<div class="gacha-grid-label indented">\u21B3 Lost 50/50</div><div class="gacha-grid-value">${s.five.losses}</div><div class="gacha-grid-value">${f(s.five.total>0?(s.five.losses/s.five.total)*100:0,1)}%</div><div class="gacha-grid-value">-</div>`;
+            details += `<div class="gacha-grid-label indented">\u21B3 Guarantee</div><div class="gacha-grid-value">${s.five.guarantees}</div><div class="gacha-grid-value">${f(s.five.total>0?(s.five.guarantees/s.five.total)*100:0,1)}%</div><div class="gacha-grid-value">-</div>`;
+        }
         details += `<div class="gacha-grid-label" style="color:var(--purple)">4 \u2605</div><div class="gacha-grid-value purple">${s.four.total}</div><div class="gacha-grid-value">${f(s.four.percent,2)}%</div><div class="gacha-grid-value">${f(s.four.avgPity,2)}</div>`;
         if (cfg.type==='character' && s.four.total>0) {
             details += `<div class="gacha-grid-label indented">\u21B3 Character</div><div class="gacha-grid-value">${s.four.chars.total}</div><div class="gacha-grid-value">${f(s.four.chars.percent,2)}%</div><div class="gacha-grid-value">${f(s.four.chars.avgPity,2)}</div>`;
@@ -1131,22 +1154,24 @@ function renderGachaStats() {
             const pullsHtml = sorted.map(p => {
                 const rarity = getItemRarity(p.name) || 5;
                 const rarityTag = rarity === 5 ? '<span class="pull-rarity gold">5\u2605</span>' : '<span class="pull-rarity">5\u2605?</span>';
-                const winTag = p.win===true ? '<span class="pull-tag win">WIN</span>' : (p.win===false ? '<span class="pull-tag loss">LOSS</span>' : '');
+                // Three outcomes: WIN (won 50/50), LOSS (lost 50/50), GUARANTEE (got featured because previous was a loss).
+                let outcomeTag = '';
+                let pullCls = p.win ? 'win' : 'loss';
+                if (p.outcome === 'win') { outcomeTag = '<span class="pull-tag win">WIN</span>'; }
+                else if (p.outcome === 'loss') { outcomeTag = '<span class="pull-tag loss">LOSS</span>'; }
+                else if (p.outcome === 'guarantee') { outcomeTag = '<span class="pull-tag guarantee">GUARANTEE</span>'; pullCls = 'win'; }
+                else if (p.win===true) { outcomeTag = '<span class="pull-tag win">WIN</span>'; }
+                else if (p.win===false) { outcomeTag = '<span class="pull-tag loss">LOSS</span>'; }
                 const date = p.time ? new Date(p.time).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) : '';
-                return `<div class="gacha-pull ${p.win?'win':'loss'}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${winTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`;
+                return `<div class="gacha-pull ${pullCls}"><span class="pull-name">${escHtml(p.name)}</span>${rarityTag}${outcomeTag}<span class="pull-date">${date}</span><span class="pity-value ${pityCls(p.pity)}">${p.pity}</span></div>`;
             }).join('');
             details += `<div class="gacha-pulls-header"><label class="pull-sort-label">Sort 5\u2605 pulls: <select class="pull-sort" data-banner="${cfg.id}">${opts}</select></label><span class="pull-count-text">${s.five.list.length} total</span></div><div class="gacha-pulls-container" data-pulls-banner="${cfg.id}">${pullsHtml}</div>`;
         }
         let guarLine = `Guaranteed at ${cfg.hardPity5}`;
-        if (cfg.type==='character') guarLine = s.pity.guaranteed ? 'Next 5\u2605 guaranteed featured' : '50/50 active';
-        else if (cfg.type==='weapon') guarLine = `Fate Points: ${s.pity.fatePoints}/2`;
+        if (cfg.type==='character' || cfg.type==='weapon') guarLine = s.pity.guaranteed ? 'Next 5\u2605 guaranteed featured' : '50/50 active';
         else if (cfg.type==='chronicled') guarLine = 'Every 5\u2605 guaranteed featured';
-        let fateDots = '';
-        if (cfg.hasFatePoints) {
-            const fp = s.pity.fatePoints||0; let dots='';
-            for (let i=0;i<3;i++) dots += `<span class="fate-dot ${(i<fp||fp>=2)?'filled':''}"></span>`;
-            fateDots = `<div class="fate-points-row" title="Fate Points: earn one per 5\u2605 loss. At 2 points, the next 5\u2605 is guaranteed featured.">${dots} Fate Points</div>`;
-        }
+        // Fate Points dots removed — weapon banner now uses 50/50 + guarantee (same as character banner).
+        const fateDots = '';
         const softCls = inSoft?'soft-pity':'';
         html += `<div class="gacha-banner-card">
             <h3>${cfg.name}</h3>
@@ -1350,8 +1375,12 @@ function parsePaimonMoe(data) {
     Object.keys(bannerKeys).forEach(bk => {
         const banner = data[bk];
         if (!banner || !Array.isArray(banner.pulls)) return;
-        const gachaType = bannerKeys[bk];
         banner.pulls.forEach(p => {
+            // Use the pull's own 'code' field as the gacha_type — paimon.moe stores
+            // pulls from both Character Event (301) and Character Event 2 (400) under
+            // the same wish-counter-character-event key. Using the code field correctly
+            // separates them so they don't get duplicated when mixed with URL imports.
+            const gachaType = p.code || bannerKeys[bk];
             const name = paimonIdToName(p.id);
             const rarity = getItemRarity(name);
             // If rarity is unknown (not in DB), use '0' so checkUnknownItems prompts the user.
