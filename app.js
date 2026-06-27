@@ -1346,6 +1346,12 @@ function buildPaimonIdMap() {
         'sethos': 'Sethos', 'skirk': 'Skirk', 'dahlia': 'Dahlia', 'dalton': 'Dalton', 'ineffa': 'Ineffa', 'escoffier': 'Escoffier',
         'amos_bow': "Amos\u2019 Bow", 'wolf_gravestone': "Wolf\u2019s Gravestone", 'hunter_path': "Hunter\u2019s Path", 'jadefall_splendor': "Jadefall\u2019s Splendor",
         'crimson_moons_semblance': "Crimson Moon\u2019s Semblance", 'tulaytullahs_remembrance': "Tulaytullah\u2019s Remembrance",
+        'nocturnes_curtain_call': "Nocturne\u2019s Curtain Call", 'waveriding_whirl': 'Waveriding Whirl', 'mountain-bracing_bolt': 'Mountain-Bracing Bolt',
+        'lightbearing_moonshard': 'Lightbearing Moonshard', 'fractured_halo': 'Fractured Halo', 'azurelight': 'Azurelight',
+        'varesa': 'Varesa', 'iansan': 'Iansan', 'aino': 'Aino', 'illuga': 'Illuga', 'columbina': 'Columbina', 'zibai': 'Zibai',
+        'lan_yan': 'Lan Yan', 'sharpshooters_oath': "Sharpshooter\u2019s Oath", 'dragons_bane': "Dragon\u2019s Bane",
+        'mitternachts_waltz': 'Mitternachts Waltz', 'wandering_evenstar': 'Wandering Evenstar', 'xiphos_moonlight': 'Xiphos Moonlight',
+        'lions_roar': "Lion\u2019s Roar", 'mountain_bracing_bolt': 'Mountain-Bracing Bolt',
     };
     Object.keys(aliases).forEach(k => { _paimonIdMap[k] = aliases[k]; });
     return _paimonIdMap;
@@ -1404,15 +1410,15 @@ function parseWishFile(text) {
     if (data['wish-counter-character-event'] || data['wish-counter-standard']) {
         return { format: 'paimon.moe', wishes: parsePaimonMoe(data), uid: data['wish-uid'] || '' };
     }
-    // Our universal format: { format: 'genshin-tool-wishes-v1', wishes: [...] }
-    if (data.format === 'genshin-tool-wishes-v1' && Array.isArray(data.wishes)) {
+    // Our universal format: { format: 'constellation-wishes-v1', wishes: [...] }
+    if (data.format === 'constellation-wishes-v1' && Array.isArray(data.wishes)) {
         return { format: 'universal', wishes: data.wishes, uid: data.uid || '' };
     }
     // Raw array of wishes
     if (Array.isArray(data) && data.length > 0 && data[0].gacha_type && data[0].name && data[0].time) {
         return { format: 'raw-array', wishes: data, uid: '' };
     }
-    throw new Error('Unrecognised wish data format. Supported: paimon.moe export, Genshin Tool universal, or raw wish array.');
+    throw new Error('Unrecognised wish data format. Supported: paimon.moe export, Constellation universal, or raw wish array.');
 }
 
 // Import wishes from a file (paimon.moe or universal format). Merges with existing.
@@ -1462,7 +1468,7 @@ async function exportWishes() {
     }
     try {
         const exportData = {
-            format: 'genshin-tool-wishes-v1',
+            format: 'constellation-wishes-v1',
             exportedAt: new Date().toISOString(),
             account: getActiveAccountName(),
             uid: '',
@@ -1485,7 +1491,7 @@ async function exportWishes() {
         const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const accSlug = getActiveAccountName().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'account';
         a.href = url;
-        a.download = `genshin-wishes-${accSlug}-${stamp}.json`;
+        a.download = `constellation-wishes-${accSlug}-${stamp}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     } catch (e) {
         await showModal({ type: 'alert', title: 'Export Failed', message: e.message, confirmText: 'OK' });
@@ -1869,7 +1875,7 @@ async function exportData() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         const d = new Date();
-        a.href = url; a.download = `genshin-backup-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+        a.href = url; a.download = `constellation-backup-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     } catch(e) { await showModal({type:'alert',title:'Export Failed',message:e.message,confirmText:'OK'}); }
 }
@@ -1879,7 +1885,7 @@ async function importData(e) {
     try {
         const text = await file.text();
         const parsed = JSON.parse(text);
-        // Check if it's a full Genshin Tool state backup.
+        // Check if it's a full Constellation state backup.
         const required = ['dailyTasks','weeklyTasks','primogemCount','gachaLog'];
         if (required.every(k => Object.prototype.hasOwnProperty.call(parsed, k))) {
             if (!await showModal({title:'Import Data',message:'This will replace all current data for this account. Continue?',type:'confirm'})) return;
@@ -1915,7 +1921,7 @@ async function importData(e) {
             renderAll();
             await showModal({ type: 'alert', title: 'Import Complete', message: `Imported ${added} new wish${added === 1 ? '' : 'es'} (${allWishes.length} total).`, confirmText: 'OK' });
         } catch (wishErr) {
-            await showModal({type:'alert',title:'Invalid File',message:'This file is neither a Genshin Tool backup nor a recognised wish-data file (paimon.moe / universal / raw array).',confirmText:'OK'});
+            await showModal({type:'alert',title:'Invalid File',message:'This file is neither a Constellation backup nor a recognised wish-data file (paimon.moe / universal / raw array).',confirmText:'OK'});
         }
     } catch (err) { await showModal({type:'alert',title:'Import Failed',message:err.message,confirmText:'OK'}); }
 }
