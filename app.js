@@ -1410,6 +1410,18 @@ function parseWishFile(text) {
     if (data['wish-counter-character-event'] || data['wish-counter-standard']) {
         return { format: 'paimon.moe', wishes: parsePaimonMoe(data), uid: data['wish-uid'] || '' };
     }
+    // UIGF format (community standard): { info: {...}, list: [...] }
+    if (data.info && Array.isArray(data.list)) {
+        const wishes = data.list.map(w => ({
+            id: w.id || ('uigf_' + w.gacha_type + '_' + w.time.replace(/[^0-9]/g, '') + '_' + (w.name||'').replace(/\s/g, '_')),
+            gacha_type: w.uigf_gacha_type || w.gacha_type,
+            name: w.name,
+            item_type: w.item_type || '',
+            rank_type: String(w.rank_type || ''),
+            time: w.time,
+        }));
+        return { format: 'UIGF', wishes, uid: data.info.uid || '' };
+    }
     // Our universal format: { format: 'constellation-wishes-v1', wishes: [...] }
     if (data.format === 'constellation-wishes-v1' && Array.isArray(data.wishes)) {
         return { format: 'universal', wishes: data.wishes, uid: data.uid || '' };
@@ -1418,7 +1430,7 @@ function parseWishFile(text) {
     if (Array.isArray(data) && data.length > 0 && data[0].gacha_type && data[0].name && data[0].time) {
         return { format: 'raw-array', wishes: data, uid: '' };
     }
-    throw new Error('Unrecognised wish data format. Supported: paimon.moe export, Constellation universal, or raw wish array.');
+    throw new Error('Unrecognised wish data format. Supported: paimon.moe, UIGF, Constellation universal, or raw wish array.');
 }
 
 // Import wishes from a file (paimon.moe or universal format). Merges with existing.
@@ -1438,13 +1450,15 @@ async function importWishFile(e) {
         if (!ok) return;
 
         let allWishes = (state.gachaLog && state.gachaLog.wishes) ? state.gachaLog.wishes.slice() : [];
-        // Dedup by BOTH wish ID and (gacha_type + name + time) so re-importing the same
-        // pulls from a different source (e.g. paimon.moe after a URL import) doesn't double them.
+        // Dedup by BOTH wish ID and a normalized (gacha_type + name + time) key.
+        // Names are normalized (apostrophes stripped, lowercased) so that
+        // "Nocturne's Curtain Call" and "Nocturnes Curtain Call" are treated as the same item.
+        const normName = n => (n || '').toLowerCase().replace(/['\u2019]/g, '');
         const existingIds = new Set(allWishes.map(w => w.id));
-        const existingKeys = new Set(allWishes.map(w => `${w.gacha_type}|${w.name}|${w.time}`));
+        const existingKeys = new Set(allWishes.map(w => `${w.gacha_type}|${normName(w.name)}|${w.time}`));
         let added = 0;
         parsed.wishes.forEach(w => {
-            const key = `${w.gacha_type}|${w.name}|${w.time}`;
+            const key = `${w.gacha_type}|${normName(w.name)}|${w.time}`;
             if (!existingIds.has(w.id) && !existingKeys.has(key)) { allWishes.push(w); added++; existingKeys.add(key); }
         });
         allWishes.sort((a, b) => new Date(b.time) - new Date(a.time));
@@ -1466,32 +1480,85 @@ async function exportWishes() {
         await showModal({ type: 'alert', title: 'No Wishes', message: 'You have no wish history to export. Import your gacha log first.', confirmText: 'OK' });
         return;
     }
+    // Ask which format to export
+    const modalPromise = showModal({
+        title: 'Export Format',
+        message: 'Choose an export format:',
+        customHtml: `<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px;">
+            <button class="btn btn-primary" id="export-uigf" style="width:100%;">UIGF v4.0 (recommended — works with paimon.moe, stardb.gg, etc.)</button>
+            <button class="btn btn-secondary" id="export-constellation" style="width:100%;">Constellation format (includes rarity + banner names)</button>
+        </div>`,
+        type: 'alert',
+        confirmText: 'Cancel',
+    });
+    // Wire the custom buttons to set the format and close the modal.
+    setTimeout(() => {
+        const uigfBtn = $('export-uigf'), constBtn = $('export-constellation');
+        const modal = $('custom-modal');
+        if (uigfBtn) uigfBtn.onclick = () => { window._exportFormat = 'uigf'; modal.classList.remove('visible'); };
+        if (constBtn) constBtn.onclick = () => { window._exportFormat = 'constellation'; modal.classList.remove('visible'); };
+    }, 100);
+    await modalPromise;
+    // Determine which was clicked (default to UIGF if cancelled)
+    const format = window._exportFormat || 'uigf';
+    window._exportFormat = null;
+
     try {
-        const exportData = {
-            format: 'constellation-wishes-v1',
-            exportedAt: new Date().toISOString(),
-            account: getActiveAccountName(),
-            uid: '',
-            bannerNames: BANNERS.reduce((m, b) => { m[b.id] = b.name; return m; }, {}),
-            wishes: state.gachaLog.wishes.map(w => ({
-                id: w.id,
-                gacha_type: w.gacha_type,
-                banner: BANNERS.find(b => b.id === w.gacha_type)?.name || w.gacha_type,
-                name: w.name,
-                item_type: w.item_type || '',
-                rank_type: String(w.rank_type),
-                rarity: parseInt(w.rank_type, 10) || getItemRarity(w.name) || 3,
-                time: w.time,
-            })),
-        };
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
+        let exportData, filename;
         const d = new Date();
         const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         const accSlug = getActiveAccountName().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'account';
+        const ts = Math.floor(d.getTime() / 1000);
+
+        if (format === 'uigf') {
+            // UIGF v4.0 — the community standard for wish data interchange.
+            exportData = {
+                info: {
+                    uid: '',
+                    lang: 'en-us',
+                    export_time: d.toISOString().replace('T', ' ').substring(0, 19),
+                    export_timestamp: ts,
+                    export_app: 'Constellation',
+                    export_app_version: '1.0',
+                    uigf_version: 'v4.0',
+                },
+                list: state.gachaLog.wishes.map(w => ({
+                    uigf_gacha_type: w.gacha_type,
+                    gacha_type: w.gacha_type,
+                    id: w.id,
+                    name: w.name,
+                    item_type: w.item_type || '',
+                    rank_type: String(w.rank_type || ''),
+                    time: w.time,
+                })),
+            };
+            filename = `UIGF_${accSlug}_${stamp}.json`;
+        } else {
+            // Constellation format — includes rarity + banner names for our own re-import.
+            exportData = {
+                format: 'constellation-wishes-v1',
+                exportedAt: d.toISOString(),
+                account: getActiveAccountName(),
+                uid: '',
+                bannerNames: BANNERS.reduce((m, b) => { m[b.id] = b.name; return m; }, {}),
+                wishes: state.gachaLog.wishes.map(w => ({
+                    id: w.id,
+                    gacha_type: w.gacha_type,
+                    banner: BANNERS.find(b => b.id === w.gacha_type)?.name || w.gacha_type,
+                    name: w.name,
+                    item_type: w.item_type || '',
+                    rank_type: String(w.rank_type),
+                    rarity: parseInt(w.rank_type, 10) || getItemRarity(w.name) || 3,
+                    time: w.time,
+                })),
+            };
+            filename = `constellation-wishes-${accSlug}-${stamp}.json`;
+        }
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
         a.href = url;
-        a.download = `constellation-wishes-${accSlug}-${stamp}.json`;
+        a.download = filename;
         document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
     } catch (e) {
         await showModal({ type: 'alert', title: 'Export Failed', message: e.message, confirmText: 'OK' });
@@ -1905,12 +1972,13 @@ async function importData(e) {
             });
             if (!ok) return;
             let allWishes = (state.gachaLog && state.gachaLog.wishes) ? state.gachaLog.wishes.slice() : [];
-            // Dedup by BOTH wish ID and (gacha_type + name + time) so re-importing doesn't double.
+            // Dedup with normalized names (strip apostrophes) to prevent duplicates.
+            const normName = n => (n || '').toLowerCase().replace(/['\u2019]/g, '');
             const existingIds = new Set(allWishes.map(w => w.id));
-            const existingKeys = new Set(allWishes.map(w => `${w.gacha_type}|${w.name}|${w.time}`));
+            const existingKeys = new Set(allWishes.map(w => `${w.gacha_type}|${normName(w.name)}|${w.time}`));
             let added = 0;
             wishParsed.wishes.forEach(w => {
-                const key = `${w.gacha_type}|${w.name}|${w.time}`;
+                const key = `${w.gacha_type}|${normName(w.name)}|${w.time}`;
                 if (!existingIds.has(w.id) && !existingKeys.has(key)) { allWishes.push(w); added++; existingKeys.add(key); }
             });
             allWishes.sort((a, b) => new Date(b.time) - new Date(a.time));
