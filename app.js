@@ -404,21 +404,27 @@ function analyzeBannerData(wishes, cfg) {
     // order, displacing the 5★ and producing wrong pity that cascades to every
     // subsequent 5★. Sorting by id is order-independent and correct in all cases.
     //
-    // For non-numeric ids (paimon.moe synthetic ids), fall back to reverse() to
-    // preserve existing behaviour (no regression).
-    const firstId = wishes[0] && wishes[0].id;
-    const numericIds = firstId != null && /^[0-9]+$/.test(String(firstId));
-    let oldToNew;
-    if (numericIds) {
-        oldToNew = [...wishes].sort((a, b) => {
-            const ta = new Date(a.time).getTime(), tb = new Date(b.time).getTime();
-            if (ta !== tb) return ta - tb;                  // oldest first
-            const ia = BigInt(a.id), ib = BigInt(b.id);     // within same timestamp: id ascending = pull order
+    // A banner may contain a MIX of numeric ids (URL import) and non-numeric ids
+    // (paimon.moe synthetic ids like "pm_301_..._00000974") if the user imported
+    // from multiple sources. The comparator handles each id individually: numeric
+    // comparison (BigInt) when BOTH ids are numeric, string comparison otherwise.
+    // This never throws, regardless of id format.
+    const isNumericId = (id) => id != null && /^[0-9]+$/.test(String(id));
+    function cmpId(a, b) {
+        const na = isNumericId(a), nb = isNumericId(b);
+        if (na && nb) {
+            const ia = BigInt(a), ib = BigInt(b);
             return ia < ib ? -1 : (ia > ib ? 1 : 0);
-        });
-    } else {
-        oldToNew = [...wishes].reverse();
+        }
+        // If one or both are non-numeric, fall back to string comparison.
+        const sa = String(a), sb = String(b);
+        return sa < sb ? -1 : (sa > sb ? 1 : 0);
     }
+    const oldToNew = [...wishes].sort((a, b) => {
+        const ta = new Date(a.time).getTime(), tb = new Date(b.time).getTime();
+        if (ta !== tb) return ta - tb;              // oldest first
+        return cmpId(a.id, b.id);                    // within same timestamp: id ascending = pull order
+    });
     let fives=[], fours=[], threes=[], p5=0, p4=0, guaranteed=false, fatePoints=0;
     oldToNew.forEach(w => {
         p5++; p4++;
@@ -1538,7 +1544,7 @@ function renderSettings() {
         <div class="settings-section"><h3>Data Backup</h3><div class="data-buttons"><button id="export-data-btn" class="btn btn-primary">Export Data</button><button id="import-data-btn" class="btn btn-secondary">Import Data</button><input type="file" id="import-data-file" accept=".json" style="display:none;"></div></div>
         <div class="settings-section"><h3>Danger Zone</h3><div class="controls-group" style="margin-top:0;"><button id="reset-all-btn" class="btn btn-clear">Clear &amp; Reset This Account</button></div></div>
         <div class="settings-section" style="text-align:center;color:var(--secondary-text);font-size:0.8em;opacity:0.7;">
-            <p>Constellation v9 &middot; timeout-protected import</p>
+            <p>Constellation v10 &middot; timeout-protected import</p>
             <p style="font-size:0.9em;margin-top:4px;">If the import hangs on "via corsproxy.io" for more than 10 seconds without falling back, you are viewing a CACHED old version. Hard-refresh (Ctrl+Shift+R / Cmd+Shift+R) to load the latest.</p>
         </div>
     </div>`;
