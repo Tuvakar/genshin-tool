@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Genshin Tool</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body data-view="main-menu">
+    <header class="header-section">
+        <h1><span id="header-element-icon" class="header-element-icon" aria-hidden="true"></span>Genshin Tool</h1>
+        <div id="live-clock" aria-label="Current time">--:--:--</div>
+    </header>
+
+    <div id="back-button-hotspot">
+        <button class="btn-back-icon" id="btn-back-main" title="Back to Menu" aria-label="Back to Menu">
+            <svg viewBox="0 0 24 24"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"/></svg>
+        </button>
+    </div>
+
+    <main>
+        <!-- Constellation main menu — irregular Y / branch shape (central hub with branches) -->
+        <div id="main-menu" class="view">
+            <div class="constellation-sky">
+                <svg class="constellation-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                    <!-- Hub(45,50) connects to: Top(50,18), Left(22,42), Right(66,44); Right -> BottomRight(72,80) -->
+                    <g class="const-lines">
+                        <line x1="45" y1="50" x2="50" y2="18"/>
+                        <line x1="45" y1="50" x2="22" y2="42"/>
+                        <line x1="45" y1="50" x2="66" y2="44"/>
+                        <line x1="66" y1="44" x2="72" y2="80"/>
+                    </g>
+                </svg>
+            </div>
+
+            <!-- 5 nav stars in a branch/Y arrangement -->
+            <button class="const-star" style="--x:50%; --y:18%;" data-view="view-primos" id="star-primos">
+                <span class="star-halo"></span>
+                <span class="star-node">
+                    <svg viewBox="0 0 24 24"><path d="M12,1L9,9L1,12L9,15L12,23L15,15L23,12L15,9L12,1Z"/></svg>
+                </span>
+                <span class="star-label">Primogems</span>
+            </button>
+
+            <button class="const-star" style="--x:22%; --y:42%;" data-view="view-tasks" id="star-tasks">
+                <span class="star-halo"></span>
+                <span class="star-node">
+                    <svg viewBox="0 0 24 24"><path d="M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20M8.5,13.5L10.5,15.5L15,11L16.5,12.5L10.5,18.5L7,15L8.5,13.5Z"/></svg>
+                </span>
+                <span class="star-label">Tasks</span>
+            </button>
+
+            <button class="const-star" style="--x:45%; --y:50%;" data-view="view-gacha" id="star-gacha">
+                <span class="star-halo"></span>
+                <span class="star-node">
+                    <svg viewBox="0 0 24 24"><path d="M12,17.27L18.18,21L17,14.63L22,9.72L15.45,8.81L12,2.5L8.55,8.81L2,9.72L7,14.63L5.82,21L12,17.27Z"/></svg>
+                </span>
+                <span class="star-label">Gacha Log</span>
+            </button>
+
+            <button class="const-star" style="--x:66%; --y:44%;" data-view="view-calendar" id="star-calendar">
+                <span class="star-halo"></span>
+                <span class="star-node">
+                    <svg viewBox="0 0 24 24"><path d="M19,19H5V8H19M19,3H18V1H16V3H8V1H6V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V5A2,2 0 0,0 19,3M16.5,12H12.5V17H16.5V12Z"/></svg>
+                </span>
+                <span class="star-label">Calendar</span>
+            </button>
+
+            <button class="const-star" style="--x:72%; --y:80%;" data-view="view-map" id="star-map">
+                <span class="star-halo"></span>
+                <span class="star-node">
+                    <svg viewBox="0 0 24 24"><path d="M12,11.5A2.5,2.5 0 0,1 9.5,9A2.5,2.5 0 0,1 12,6.5A2.5,2.5 0 0,1 14.5,9A2.5,2.5 0 0,1 12,11.5M12,2A7,7 0 0,0 5,9C5,14.25 12,22 12,22C12,22 19,14.25 19,9A7,7 0 0,0 12,2Z"/></svg>
+                </span>
+                <span class="star-label">Map</span>
+            </button>
+        </div>
+
+        <div id="view-map" class="view"></div>
+        <div id="view-tasks" class="view"></div>
+        <div id="view-primos" class="view"></div>
+        <div id="view-gacha" class="view"></div>
+        <div id="view-calendar" class="view"></div>
+        <div id="view-settings" class="view"></div>
+    </main>
+
+    <div id="menu-btn-settings" class="menu-button-fixed" data-view="view-settings" role="button" tabindex="0" aria-label="Settings">
+        <svg viewBox="0 0 24 24"><path d="M19.43,12.98C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.98L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.68 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.98M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5Z"/></svg>
+    </div>
+
+    <div id="status-bar" class="status-bar">
+        <span class="status-item"><span class="status-label">RESIN</span> <span id="status-resin">0</span><span class="status-sub">/160</span></span>
+        <span class="status-divider"></span>
+        <span class="status-item"><span class="status-label">STREAK</span> <span id="status-streak">0</span></span>
+        <span class="status-divider"></span>
+        <span class="status-item"><span class="status-label">5★ PITY</span> <span id="status-pity">0</span><span class="status-sub">/90</span></span>
+    </div>
+
+    <div id="custom-modal" class="modal-overlay"></div>
+
+    <script src="worldmap-data.js"></script>
+    <script src="worldmap.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
