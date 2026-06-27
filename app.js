@@ -944,7 +944,11 @@ async function handleGachaImport(url) {
     }
     renderImportStatus('Starting import...');
     let allWishes = (state.gachaLog && state.gachaLog.wishes) ? state.gachaLog.wishes.slice() : [];
+    // Universal dedup: check by BOTH wish ID and normalized (gacha_type + name + time).
+    // This catches duplicates even when the same pull has different IDs across
+    // import sources (e.g. paimon.moe vs URL-based PowerShell import).
     const existingIds = new Set(allWishes.map(w => w.id));
+    const existingKeys = new Set(allWishes.map(w => `${w.gacha_type}|${normalizeNameKey(w.name)}|${w.time}`));
 
     function setStatus(text) {
         const el = $('gacha-import-status'); if (el) el.textContent = text;
@@ -995,12 +999,28 @@ async function handleGachaImport(url) {
                 if (!data) break;
                 const list = (data.data && data.data.list) || [];
                 if (list.length===0) break;
-                for (const wish of list) { if (existingIds.has(wish.id)) { foundExisting=true; break; } allWishes.push(wish); }
+                for (const wish of list) {
+                    // Resolve the name to canonical form using the live database.
+                    wish.name = resolveItemName(wish.name);
+                    wish.gacha_type = String(wish.gacha_type);
+                    if (wish.gacha_type === '400') wish.gacha_type = '301';
+                    const key = `${wish.gacha_type}|${normalizeNameKey(wish.name)}|${wish.time}`;
+                    if (existingIds.has(wish.id) || existingKeys.has(key)) { foundExisting=true; break; }
+                    allWishes.push(wish);
+                    existingIds.add(wish.id);
+                    existingKeys.add(key);
+                }
                 endId = list[list.length-1].id; page++;
                 await new Promise(r => setTimeout(r, 300));
             }
         }
-        const unique = Array.from(new Map(allWishes.map(w => [w.id, w])).values());
+        // Final dedup by normalized key (catches any remaining duplicates).
+        const seenKeys = new Set();
+        const unique = [];
+        allWishes.forEach(w => {
+            const key = `${w.gacha_type}|${normalizeNameKey(w.name)}|${w.time}`;
+            if (!seenKeys.has(key)) { unique.push(w); seenKeys.add(key); }
+        });
         unique.sort((a,b) => new Date(b.time) - new Date(a.time));
         state.gachaLog = { wishes: unique, lastImport: new Date().toISOString() };
         saveState();
@@ -1011,7 +1031,12 @@ async function handleGachaImport(url) {
     } catch (err) {
         // Save partial progress so a mid-import failure doesn't lose what was fetched.
         if (allWishes.length > 0) {
-            const unique = Array.from(new Map(allWishes.map(w => [w.id, w])).values());
+            const seenKeys = new Set();
+            const unique = [];
+            allWishes.forEach(w => {
+                const key = `${w.gacha_type}|${normalizeNameKey(w.name)}|${w.time}`;
+                if (!seenKeys.has(key)) { unique.push(w); seenKeys.add(key); }
+            });
             unique.sort((a,b) => new Date(b.time) - new Date(a.time));
             state.gachaLog = { wishes: unique, lastImport: new Date().toISOString() };
             saveState();
