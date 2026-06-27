@@ -324,70 +324,6 @@ function loadTheme() {
 }
 function saveTheme(t, ca) { try { localStorage.setItem(THEME_KEY, JSON.stringify({theme:t, customAccent:ca||null})); } catch(e){} }
 
-// ---------- Floating theme switcher (bottom-right popover) ----------
-function buildThemePopover() {
-    const grid = $('theme-popover-grid'); if (!grid) return;
-    grid.innerHTML = Object.keys(THEMES).map(name => {
-        const sel = name === _activeTheme ? 'selected' : '';
-        return `<div class="theme-popover-chip ${sel}" data-theme="${name}" title="${name}">
-            <span class="theme-popover-swatch" style="background:${THEMES[name].accent}"></span>
-            <span class="theme-popover-name">${name}</span>
-        </div>`;
-    }).join('');
-    grid.querySelectorAll('.theme-popover-chip').forEach(chip => {
-        chip.addEventListener('click', () => {
-            const name = chip.dataset.theme;
-            applyTheme(name, _customAccent);
-            saveTheme(name, _customAccent);
-            syncThemePopover();
-            syncSettingsThemePicker();
-        });
-    });
-    const accentInput = $('theme-popover-accent');
-    if (accentInput) {
-        accentInput.value = _customAccent || THEMES[_activeTheme].accent;
-        accentInput.addEventListener('input', e => applyTheme(_activeTheme, e.target.value));
-        accentInput.addEventListener('change', e => { saveTheme(_activeTheme, e.target.value); syncThemePopover(); syncSettingsThemePicker(); });
-    }
-    const resetBtn = $('theme-popover-reset');
-    if (resetBtn) resetBtn.addEventListener('click', () => {
-        _customAccent = null;
-        applyTheme(_activeTheme, null);
-        saveTheme(_activeTheme, null);
-        syncThemePopover();
-        syncSettingsThemePicker();
-    });
-}
-function syncThemePopover() {
-    // update selected states + accent dot
-    document.querySelectorAll('.theme-popover-chip').forEach(chip => {
-        chip.classList.toggle('selected', chip.dataset.theme === _activeTheme);
-    });
-    const dot = $('theme-fab-dot');
-    if (dot) dot.style.background = _customAccent || THEMES[_activeTheme].accent;
-    const accentInput = $('theme-popover-accent');
-    if (accentInput) accentInput.value = _customAccent || THEMES[_activeTheme].accent;
-}
-function syncSettingsThemePicker() {
-    // if the Settings view is open, refresh its theme chips too
-    if ($('view-settings').classList.contains('active')) renderSettings();
-}
-function initThemeFab() {
-    const fab = $('theme-fab'), pop = $('theme-popover');
-    if (!fab || !pop) return;
-    buildThemePopover();
-    syncThemePopover();
-    fab.addEventListener('click', (e) => {
-        e.stopPropagation();
-        pop.classList.toggle('visible');
-    });
-    // Close popover when clicking outside it
-    document.addEventListener('click', (e) => {
-        if (!pop.contains(e.target) && e.target !== fab && !fab.contains(e.target)) {
-            pop.classList.remove('visible');
-        }
-    });
-}
 
 // ---------- Account pill (header) ----------
 function renderAccountPill() {
@@ -467,11 +403,11 @@ function estimateFiveStarProb(current5, cfg) {
 function analyzeBannerData(wishes, cfg) {
     if (!wishes || wishes.length===0) return null;
     const oldToNew = [...wishes].reverse();
-    let fives=[], fours=[], p5=0, p4=0, guaranteed=false, fatePoints=0;
+    let fives=[], fours=[], threes=[], p5=0, p4=0, guaranteed=false, fatePoints=0;
     oldToNew.forEach(w => {
         p5++; p4++;
         const rarity = getItemRarity(w.name) || parseInt(w.rank_type, 10);
-        const pd = { name:w.name, pity:p5, win:null, fatePoints:null, inSoftPity: p5>=cfg.softPity5 };
+        const pd = { name:w.name, pity:p5, win:null, fatePoints:null, inSoftPity: p5>=cfg.softPity5, time:w.time, item_type:w.item_type, rank_type:w.rank_type };
         if (rarity===5) {
             if (cfg.type==='character') {
                 const isLoss = isStandardFiveStar(w.name);
@@ -486,6 +422,7 @@ function analyzeBannerData(wishes, cfg) {
             fives.push(pd); p5=0;
         }
         if (rarity===4) { fours.push(Object.assign({}, w, {pity:p4})); p4=0; }
+        if (rarity===3) { threes.push(Object.assign({}, w, {pity:p5})); }
     });
     const avg = a => a.length ? a.reduce((s,i)=>s+i.pity,0)/a.length : 0;
     let f4c=[], f4w=[];
@@ -495,6 +432,7 @@ function analyzeBannerData(wishes, cfg) {
         totalWishes: wishes.length,
         five: { list:fives.slice().reverse(), total:fives.length, avgPity:avg(fives), percent:(fives.length/wishes.length)*100, wins, losses, winRate:(wins+losses)>0?(wins/(wins+losses))*100:0 },
         four: { list:fours.slice().reverse(), total:fours.length, avgPity:avg(fours), percent:(fours.length/wishes.length)*100, chars:{total:f4c.length,avgPity:avg(f4c),percent:(f4c.length/wishes.length)*100}, weapons:{total:f4w.length,avgPity:avg(f4w),percent:(f4w.length/wishes.length)*100} },
+        three: { total: threes.length, percent: (threes.length/wishes.length)*100, list: threes.slice().reverse() },
         pity: { current5:p5, current4:p4, guaranteed, fatePoints },
     };
 }
@@ -522,10 +460,20 @@ async function checkUnknownItems() {
     log.wishes.forEach(w => {
         if (seen.has(w.name)) return; seen.add(w.name);
         const r = getItemRarity(w.name);
-        if (r!==4 && r!==5) {
-            const rank = parseInt(w.rank_type,10);
-            if (rank===4||rank===5) { if(!state.userItemOverrides) state.userItemOverrides={}; if(!Object.prototype.hasOwnProperty.call(state.userItemOverrides,w.name)) state.userItemOverrides[w.name]=rank; }
-            else unknowns.push(w.name);
+        if (r !== 4 && r !== 5) {
+            const rank = parseInt(w.rank_type, 10);
+            if (rank === 4 || rank === 5) {
+                // Seed the override from rank_type so we don't block on every item.
+                if (!state.userItemOverrides) state.userItemOverrides = {};
+                if (!Object.prototype.hasOwnProperty.call(state.userItemOverrides, w.name)) state.userItemOverrides[w.name] = rank;
+            } else if (rank === 3) {
+                // 3★ items don't matter for pity tracking — seed them silently and move on.
+                if (!state.userItemOverrides) state.userItemOverrides = {};
+                if (!Object.prototype.hasOwnProperty.call(state.userItemOverrides, w.name)) state.userItemOverrides[w.name] = 3;
+            } else {
+                // Only prompt for items with no rank_type at all (truly unknown).
+                unknowns.push(w.name);
+            }
         }
     });
     for (const n of unknowns) await promptUnknownRarity(n);
@@ -795,6 +743,11 @@ function renderGachaStats() {
             <div class="controls-group" style="max-width:400px;margin:0 auto 10px auto;">
                 <button id="import-gacha-btn" class="btn btn-action">Import Gacha Log</button>
             </div>
+            <div class="wish-data-row">
+                <button id="import-wish-file-btn" class="btn btn-secondary" title="Import wishes from a JSON file (paimon.moe or universal format)">Import Wishes File</button>
+                <button id="export-wish-btn" class="btn btn-secondary" title="Export your wish history to a universal JSON file">Export Wishes</button>
+                <input type="file" id="wish-file-input" accept=".json" style="display:none;">
+            </div>
             <div id="gacha-last-import" class="last-import-row"></div>
             <div id="gacha-stats-container"></div>
         </div>`;
@@ -804,6 +757,9 @@ function renderGachaStats() {
         }).catch(()=>{});
     });
     $('import-gacha-btn').addEventListener('click', openGachaImport);
+    $('import-wish-file-btn').addEventListener('click', () => $('wish-file-input').click());
+    $('wish-file-input').addEventListener('change', importWishFile);
+    $('export-wish-btn').addEventListener('click', exportWishes);
     const lastImp = $('gacha-last-import');
     const li = state.gachaLog && state.gachaLog.lastImport;
     if (li) {
@@ -838,7 +794,10 @@ function renderGachaStats() {
             details += `<div class="gacha-grid-label indented">\u21B3 Character</div><div class="gacha-grid-value">${s.four.chars.total}</div><div class="gacha-grid-value">${f(s.four.chars.percent,2)}%</div><div class="gacha-grid-value">${f(s.four.chars.avgPity,2)}</div>`;
             details += `<div class="gacha-grid-label indented">\u21B3 Weapon</div><div class="gacha-grid-value">${s.four.weapons.total}</div><div class="gacha-grid-value">${f(s.four.weapons.percent,2)}%</div><div class="gacha-grid-value">${f(s.four.weapons.avgPity,2)}</div>`;
         }
+        details += `<div class="gacha-grid-label" style="color:var(--light-blue)">3 \u2605</div><div class="gacha-grid-value" style="color:var(--light-blue)">${s.three.total}</div><div class="gacha-grid-value">${f(s.three.percent,2)}%</div><div class="gacha-grid-value">-</div>`;
         details += '</div>';
+        // "View all pulls" button — opens a modal listing every pull, color-coded by rarity.
+        details += `<button class="btn btn-secondary view-all-pulls-btn" data-banner="${cfg.id}" style="margin-top:12px;width:100%;">View All ${s.totalWishes} Pulls</button>`;
         if (s.five.list.length>0) {
             const opts = GACHA_SORT_OPTIONS.map(o => `<option value="${o.id}" ${o.id===_gachaSort?'selected':''}>${o.label}</option>`).join('');
             const sorted = sortPulls(s.five.list, _gachaSort);
@@ -881,6 +840,29 @@ function renderGachaStats() {
             container.querySelectorAll('.pull-sort').forEach(s => { if (s !== e.target) s.value = _gachaSort; });
             BANNERS.forEach(b => rerenderPulls(b.id));
         });
+    });
+    // Bind "View all pulls" buttons — open a modal listing every pull, color-coded by rarity.
+    container.querySelectorAll('.view-all-pulls-btn').forEach(btn => {
+        btn.addEventListener('click', () => showAllPullsModal(btn.dataset.banner));
+    });
+}
+
+// Modal showing every pull on a banner, color-coded by rarity.
+async function showAllPullsModal(bannerId) {
+    const cfg = BANNERS.find(b => b.id === bannerId); if (!cfg) return;
+    const allWishes = (state.gachaLog && state.gachaLog.wishes) ? state.gachaLog.wishes : [];
+    const bw = allWishes.filter(w => w.gacha_type === bannerId);
+    // newest first (already sorted in storage, but ensure)
+    const sorted = bw.slice().sort((a, b) => new Date(b.time) - new Date(a.time));
+    const listHtml = sorted.map(w => {
+        const rarity = getItemRarity(w.name) || parseInt(w.rank_type, 10) || 3;
+        const date = w.time ? new Date(w.time).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'2-digit' }) : '';
+        return `<li class="all-pull rarity-${rarity}"><span class="all-pull-rarity">${rarity}\u2605</span><span class="all-pull-name">${escHtml(w.name)}</span><span class="all-pull-type">${w.item_type || ''}</span><span class="all-pull-date">${date}</span></li>`;
+    }).join('');
+    await showModal({
+        title: `${cfg.name} \u2014 All Pulls (${sorted.length})`,
+        customHtml: `<ul class="all-pulls-list">${listHtml}</ul>`,
+        confirmText: 'Close',
     });
 }
 function emptyBannerCard(cfg) {
@@ -983,6 +965,169 @@ async function handleGachaImport(url) {
         renderGachaStats();
         renderCalendar();
         renderStatusBar();
+    }
+}
+
+// ---------- Wish data import/export (paimon.moe + universal format) ----------
+
+// Build a reverse map: paimon.moe snake_case ID -> display name.
+// Uses ITEM_DB_FALLBACK keys (display names) converted to snake_case.
+let _paimonIdMap = null;
+function buildPaimonIdMap() {
+    if (_paimonIdMap) return _paimonIdMap;
+    _paimonIdMap = {};
+    Object.keys(ITEM_DB_FALLBACK).forEach(name => {
+        const id = nameToSnakeCase(name);
+        _paimonIdMap[id] = name;
+    });
+    // Common extra aliases paimon.moe uses that may not match simple conversion.
+    const aliases = {
+        'traveler_anemo': 'Traveler', 'traveler_geo': 'Traveler', 'traveler_electro': 'Traveler', 'traveler_dendro': 'Traveler', 'traveler_hydro': 'Traveler', 'traveler_pyro': 'Traveler',
+        'raiden_shogun': 'Raiden Shogun', 'sangonomiya_kokomi': 'Sangonomiya Kokomi', 'kaedehara_kazuha': 'Kaedehara Kazuha', 'kamisato_ayaka': 'Kamisato Ayaka', 'kamisato_ayato': 'Kamisato Ayato',
+        'arataki_itto': 'Arataki Itto', 'kuki_shinobu': 'Kuki Shinobu', 'shikanoin_heizou': 'Shikanoin Heizou', 'yumemizuki_mizuki': 'Yumemizuki Mizuki',
+        'tighnari': 'Tighnari', 'dehya': 'Dehya', 'nilou': 'Nilou', 'cyno': 'Cyno', 'nahida': 'Nahida', 'layla': 'Layla', 'faruzan': 'Faruzan',
+        'alhaitham': 'Alhaitham', 'kaveh': 'Kaveh', 'baizhu': 'Baizhu', 'kirara': 'Kirara', 'collei': 'Collei', 'dori': 'Dori',
+        'lyney': 'Lyney', 'lynette': 'Lynette', 'neuvillette': 'Neuvillette', 'furina': 'Furina', 'navia': 'Navia', 'wriothesley': 'Wriothesley',
+        'clorinde': 'Clorinde', 'chiori': 'Chiori', 'arlecchino': 'Arlecchino', 'sigewinne': 'Sigewinne', 'emilie': 'Emilie', 'xianyun': 'Xianyun', 'gaming': 'Gaming', 'chevreuse': 'Chevreuse',
+        'mualani': 'Mualani', 'kinich': 'Kinich', 'chasca': 'Chasca', 'mavuika': 'Mavuika', 'citlali': 'Citlali', 'xilonen': 'Xilonen', 'kachina': 'Kachina', 'ororon': 'Ororon', 'ifá': 'Ifa', 'ifa': 'Ifa',
+        'sethos': 'Sethos', 'skirk': 'Skirk', 'dahlia': 'Dahlia', 'dalton': 'Dalton', 'ineffa': 'Ineffa', 'escoffier': 'Escoffier',
+        'amos_bow': "Amos\u2019 Bow", 'wolf_gravestone': "Wolf\u2019s Gravestone", 'hunter_path': "Hunter\u2019s Path", 'jadefall_splendor': "Jadefall\u2019s Splendor",
+        'crimson_moons_semblance': "Crimson Moon\u2019s Semblance", 'tulaytullahs_remembrance': "Tulaytullah\u2019s Remembrance",
+    };
+    Object.keys(aliases).forEach(k => { _paimonIdMap[k] = aliases[k]; });
+    return _paimonIdMap;
+}
+function nameToSnakeCase(name) {
+    return name.toLowerCase()
+        .replace(/['\u2019]/g, '')   // strip apostrophes
+        .replace(/[^a-z0-9]+/g, '_') // non-alphanumeric -> _
+        .replace(/^_+|_+$/g, '');    // trim underscores
+}
+function paimonIdToName(id) {
+    const map = buildPaimonIdMap();
+    if (map[id]) return map[id];
+    // Fallback: title-case the snake_case ID.
+    return id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+// Parse a paimon.moe export file and return an array of wishes in our format.
+function parsePaimonMoe(data) {
+    const bannerKeys = {
+        'wish-counter-character-event': '301',
+        'wish-counter-weapon-event': '302',
+        'wish-counter-standard': '200',
+        'wish-counter-chronicled': '500',
+        'wish-counter-beginners': '100',
+    };
+    const wishes = [];
+    Object.keys(bannerKeys).forEach(bk => {
+        const banner = data[bk];
+        if (!banner || !Array.isArray(banner.pulls)) return;
+        const gachaType = bannerKeys[bk];
+        banner.pulls.forEach(p => {
+            const name = paimonIdToName(p.id);
+            const rarity = getItemRarity(name) || (p.type === 'character' ? 4 : 3);
+            wishes.push({
+                id: 'pm_' + gachaType + '_' + p.time.replace(/[^0-9]/g, '') + '_' + p.id,
+                gacha_type: gachaType,
+                name: name,
+                item_type: p.type === 'character' ? 'Character' : 'Weapon',
+                rank_type: String(rarity),
+                time: p.time,
+            });
+        });
+    });
+    return wishes;
+}
+
+// Detect format and parse any supported wish-data JSON file.
+function parseWishFile(text) {
+    const data = JSON.parse(text);
+    // paimon.moe format: has wish-counter-* keys
+    if (data['wish-counter-character-event'] || data['wish-counter-standard']) {
+        return { format: 'paimon.moe', wishes: parsePaimonMoe(data), uid: data['wish-uid'] || '' };
+    }
+    // Our universal format: { format: 'genshin-tool-wishes-v1', wishes: [...] }
+    if (data.format === 'genshin-tool-wishes-v1' && Array.isArray(data.wishes)) {
+        return { format: 'universal', wishes: data.wishes, uid: data.uid || '' };
+    }
+    // Raw array of wishes
+    if (Array.isArray(data) && data.length > 0 && data[0].gacha_type && data[0].name && data[0].time) {
+        return { format: 'raw-array', wishes: data, uid: '' };
+    }
+    throw new Error('Unrecognised wish data format. Supported: paimon.moe export, Genshin Tool universal, or raw wish array.');
+}
+
+// Import wishes from a file (paimon.moe or universal format). Merges with existing.
+async function importWishFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+        const text = await file.text();
+        const parsed = parseWishFile(text);
+        const ok = await showModal({
+            title: 'Import Wishes',
+            message: `Detected <b>${parsed.format}</b> format with <b>${parsed.wishes.length}</b> pulls.${parsed.wishes.length > 0 ? '<br><br>This will merge with your existing wish history (duplicates are skipped by pull ID).' : '<br><br>No valid pulls found.'}`,
+            type: 'confirm',
+            confirmText: 'Import',
+        });
+        if (!ok) return;
+
+        let allWishes = (state.gachaLog && state.gachaLog.wishes) ? state.gachaLog.wishes.slice() : [];
+        const existingIds = new Set(allWishes.map(w => w.id));
+        let added = 0;
+        parsed.wishes.forEach(w => {
+            if (!existingIds.has(w.id)) { allWishes.push(w); added++; }
+        });
+        allWishes.sort((a, b) => new Date(b.time) - new Date(a.time));
+        state.gachaLog = { wishes: allWishes, lastImport: new Date().toISOString() };
+        saveState();
+        deriveStandardPool();
+        await checkUnknownItems();
+        renderGachaStats(); renderCalendar(); renderStatusBar();
+        await showModal({ type: 'alert', title: 'Import Complete', message: `Imported ${added} new wish${added === 1 ? '' : 'es'} (${allWishes.length} total).`, confirmText: 'OK' });
+    } catch (err) {
+        await showModal({ type: 'alert', title: 'Import Failed', message: err.message || String(err), confirmText: 'OK' });
+        renderGachaStats();
+    }
+}
+
+// Export wishes in a clean universal JSON format that other tools can import.
+async function exportWishes() {
+    if (!state.gachaLog || !state.gachaLog.wishes || state.gachaLog.wishes.length === 0) {
+        await showModal({ type: 'alert', title: 'No Wishes', message: 'You have no wish history to export. Import your gacha log first.', confirmText: 'OK' });
+        return;
+    }
+    try {
+        const exportData = {
+            format: 'genshin-tool-wishes-v1',
+            exportedAt: new Date().toISOString(),
+            account: getActiveAccountName(),
+            uid: '',
+            bannerNames: BANNERS.reduce((m, b) => { m[b.id] = b.name; return m; }, {}),
+            wishes: state.gachaLog.wishes.map(w => ({
+                id: w.id,
+                gacha_type: w.gacha_type,
+                banner: BANNERS.find(b => b.id === w.gacha_type)?.name || w.gacha_type,
+                name: w.name,
+                item_type: w.item_type || '',
+                rank_type: String(w.rank_type),
+                rarity: parseInt(w.rank_type, 10) || getItemRarity(w.name) || 3,
+                time: w.time,
+            })),
+        };
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const d = new Date();
+        const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const accSlug = getActiveAccountName().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'account';
+        a.href = url;
+        a.download = `genshin-wishes-${accSlug}-${stamp}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch (e) {
+        await showModal({ type: 'alert', title: 'Export Failed', message: e.message, confirmText: 'OK' });
     }
 }
 
@@ -1267,8 +1412,14 @@ function renderCalendar() {
 async function showDailyBreakdown(dateKey) {
     const pulls = state.gachaLog.wishes.filter(w => w.time.startsWith(dateKey));
     if (pulls.length===0) return;
-    const listHtml = pulls.map(p => { const r = getItemRarity(p.name)||parseInt(p.rank_type,10); return `<li><span class="rarity-${r}">${escHtml(p.name)}</span></li>`; }).join('');
-    await showModal({ title:`Pulls for ${dateKey}`, customHtml:`<ul class="pull-breakdown-list">${listHtml}</ul>`, confirmText:'Close' });
+    // newest first, color-coded by rarity (left border + rarity tag color)
+    const sorted = pulls.slice().sort((a, b) => new Date(b.time) - new Date(a.time));
+    const listHtml = sorted.map(p => {
+        const r = getItemRarity(p.name) || parseInt(p.rank_type, 10) || 3;
+        const time = p.time ? new Date(p.time).toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' }) : '';
+        return `<li class="rarity-${r}"><span class="rarity-${r}" style="font-weight:700;margin-right:8px;">${r}\u2605</span><span style="color:var(--primary-text)">${escHtml(p.name)}</span><span style="color:var(--secondary-text);font-size:0.85em;margin-left:auto;">${time}</span></li>`;
+    }).join('');
+    await showModal({ title:`Pulls for ${dateKey} (${pulls.length})`, customHtml:`<ul class="pull-breakdown-list">${listHtml}</ul>`, confirmText:'Close' });
 }
 
 // ---------- Settings ----------
@@ -1309,10 +1460,10 @@ function renderSettings() {
         <div class="settings-section"><h3>Danger Zone</h3><div class="controls-group" style="margin-top:0;"><button id="reset-all-btn" class="btn btn-clear">Clear &amp; Reset This Account</button></div></div>
     </div>`;
     $('back-to-menu-btn').addEventListener('click', () => showView('main-menu'));
-    document.querySelectorAll('.theme-chip').forEach(chip => chip.addEventListener('click', () => { const n=chip.dataset.theme; applyTheme(n, _customAccent); saveTheme(n, _customAccent); renderSettings(); syncThemePopover(); }));
+    document.querySelectorAll('.theme-chip').forEach(chip => chip.addEventListener('click', () => { const n=chip.dataset.theme; applyTheme(n, _customAccent); saveTheme(n, _customAccent); renderSettings(); }));
     const ai = $('custom-accent-input');
-    if (ai) { ai.addEventListener('input', e => applyTheme(_activeTheme, e.target.value)); ai.addEventListener('change', e => { saveTheme(_activeTheme, e.target.value); renderSettings(); syncThemePopover(); }); }
-    const ra = $('reset-accent-btn'); if (ra) ra.addEventListener('click', () => { _customAccent=null; applyTheme(_activeTheme, null); saveTheme(_activeTheme, null); renderSettings(); syncThemePopover(); });
+    if (ai) { ai.addEventListener('input', e => applyTheme(_activeTheme, e.target.value)); ai.addEventListener('change', e => { saveTheme(_activeTheme, e.target.value); renderSettings(); }); }
+    const ra = $('reset-accent-btn'); if (ra) ra.addEventListener('click', () => { _customAccent=null; applyTheme(_activeTheme, null); saveTheme(_activeTheme, null); renderSettings(); });
     $('manual-reset-btn').addEventListener('click', () => performDailyReset(false));
     $('reset-primo-btn').addEventListener('click', async () => { if (await showModal({title:'Confirm Primogem Reset',message:'This will reset your Primogem count to 0. This cannot be undone.',type:'confirm'})) { state.primogemCount=0; saveState(); renderPrimos(); renderStatusBar(); } });
     $('set-date-btn').addEventListener('click', async () => {
@@ -1447,7 +1598,7 @@ function bindGlobalEvents() {
 async function init() {
     $('custom-modal').innerHTML = `<div class="modal-content"><h3 id="modal-title"></h3><p id="modal-message"></p><div id="modal-custom-content"></div><input type="text" id="modal-input" class="modal-input" style="display:none;"><div class="modal-buttons"><button id="modal-cancel-btn" class="btn btn-secondary">Cancel</button><button id="modal-confirm-btn" class="btn btn-primary">Confirm</button></div></div>`;
     loadTheme();
-    initThemeFab();
+    
     initAccountPill();
     loadState();
     await loadItemDB();
