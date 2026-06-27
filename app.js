@@ -1537,6 +1537,10 @@ function renderSettings() {
         <div class="settings-section"><h3>Date Override</h3><p id="custom-date-display" style="text-align:center;color:var(--secondary-text);margin-bottom:10px;">${dateDisplay}</p><div class="controls-group" style="margin-top:0;"><button id="set-date-btn" class="btn btn-secondary">Set Custom Date</button><button id="sync-date-btn" class="btn btn-secondary" style="display:${state.customDate?'block':'none'};">Sync to Today</button></div></div>
         <div class="settings-section"><h3>Data Backup</h3><div class="data-buttons"><button id="export-data-btn" class="btn btn-primary">Export Data</button><button id="import-data-btn" class="btn btn-secondary">Import Data</button><input type="file" id="import-data-file" accept=".json" style="display:none;"></div></div>
         <div class="settings-section"><h3>Danger Zone</h3><div class="controls-group" style="margin-top:0;"><button id="reset-all-btn" class="btn btn-clear">Clear &amp; Reset This Account</button></div></div>
+        <div class="settings-section" style="text-align:center;color:var(--secondary-text);font-size:0.8em;opacity:0.7;">
+            <p>Constellation v9 &middot; timeout-protected import</p>
+            <p style="font-size:0.9em;margin-top:4px;">If the import hangs on "via corsproxy.io" for more than 10 seconds without falling back, you are viewing a CACHED old version. Hard-refresh (Ctrl+Shift+R / Cmd+Shift+R) to load the latest.</p>
+        </div>
     </div>`;
     document.querySelectorAll('.theme-chip').forEach(chip => chip.addEventListener('click', () => { const n=chip.dataset.theme; applyTheme(n, _customAccent); saveTheme(n, _customAccent); renderSettings(); }));
     const ai = $('custom-accent-input');
