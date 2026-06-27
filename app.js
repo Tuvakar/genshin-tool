@@ -1699,6 +1699,18 @@ function bindGlobalEvents() {
 }
 
 async function init() {
+    // Global safety net: if ANY uncaught error happens during init, still force the
+    // constellation menu visible so the user never sees a blank page. This is the
+    // last line of defence against environment-specific throws (e.g. GitHub Pages).
+    window.addEventListener('error', (e) => {
+        console.error('Uncaught error:', e.error || e.message);
+        try { forceMenuVisible(); } catch(_) {}
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+        console.error('Unhandled rejection:', e.reason);
+        try { forceMenuVisible(); } catch(_) {}
+    });
+
     $('custom-modal').innerHTML = `<div class="modal-content"><h3 id="modal-title"></h3><p id="modal-message"></p><div id="modal-custom-content"></div><input type="text" id="modal-input" class="modal-input" style="display:none;"><div class="modal-buttons"><button id="modal-cancel-btn" class="btn btn-secondary">Cancel</button><button id="modal-confirm-btn" class="btn btn-primary">Confirm</button></div></div>`;
     loadTheme();
 
@@ -1714,12 +1726,42 @@ async function init() {
     try { deriveStandardPool(); } catch(e) { console.warn('deriveStandardPool failed', e); }
     try { recomputePityState(); } catch(e) { console.warn('recomputePityState failed', e); }
     try { checkForAutomaticResets(); } catch(e) { console.warn('checkForAutomaticResets failed', e); }
-    startResinTicker();
-    bindGlobalEvents();
-    renderAll();
-    showView('main-menu');
-    setTimeout(animateConstellationEntry, 50);
-    saveState();
+    // Start the clock + bind nav clicks FIRST so the header is alive immediately.
+    try { startResinTicker(); } catch(e) { console.warn('startResinTicker failed', e); }
+    try { bindGlobalEvents(); } catch(e) { console.warn('bindGlobalEvents failed', e); }
+    // Show the constellation menu BEFORE rendering the (hidden) sub-views. This way,
+    // even if a sub-view render throws, the menu is already visible to the user.
+    try { showView('main-menu'); } catch(e) { console.warn('showView failed', e); forceMenuVisible(); }
+    try { setTimeout(animateConstellationEntry, 50); } catch(e) { console.warn('animateConstellationEntry failed', e); }
+    // Render each sub-view in its own try/catch so one broken view can't break the rest.
+    try { renderTasks(); } catch(e) { console.warn('renderTasks failed', e); }
+    try { renderPrimos(); } catch(e) { console.warn('renderPrimos failed', e); }
+    try { renderGachaStats(); } catch(e) { console.warn('renderGachaStats failed', e); }
+    try { renderCalendar(); } catch(e) { console.warn('renderCalendar failed', e); }
+    try { renderSettings(); } catch(e) { console.warn('renderSettings failed', e); }
+    try { renderStatusBar(); } catch(e) { console.warn('renderStatusBar failed', e); }
+    try { saveState(); } catch(e) { console.warn('saveState failed', e); }
+}
+
+// Last-resort: force the constellation menu + clock + status bar visible even if
+// the rest of init threw. Used by the global error handler and as a showView fallback.
+function forceMenuVisible() {
+    const menu = document.getElementById('main-menu');
+    if (menu) menu.classList.add('active');
+    document.body.setAttribute('data-view', 'main-menu');
+    // Kick the clock if it's still showing dashes.
+    const clock = document.getElementById('live-clock');
+    if (clock && clock.textContent && clock.textContent.includes('-')) {
+        try { clock.textContent = new Date().toLocaleTimeString('en-US', { hour12:true, hour:'2-digit', minute:'2-digit' }); } catch(e) {}
+    }
+    // Animate the stars in if they haven't already.
+    try {
+        if (document.querySelectorAll('.const-star.entered').length === 0) {
+            document.querySelectorAll('.const-star').forEach((s, i) => {
+                setTimeout(() => s.classList.add('entered'), 50 + i * 70);
+            });
+        }
+    } catch(e) {}
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
