@@ -417,7 +417,35 @@ function estimateFiveStarProb(current5, cfg) {
 }
 function analyzeBannerData(wishes, cfg) {
     if (!wishes || wishes.length===0) return null;
-    const oldToNew = [...wishes].reverse();
+    // Order wishes oldest -> newest for pity accumulation.
+    //
+    // The Genshin wish API assigns each pull a numeric `id` that increases
+    // monotonically with each pull (globally, across all banners). So for wishes
+    // that carry a numeric id (URL import, UIGF, Constellation exports of those),
+    // sorting by (time ASC, id ASC) yields TRUE pull order regardless of how the
+    // source ordered the data.
+    //
+    // This fixes a pity miscount for chronological (oldest-first) file exports:
+    // a plain reverse() assumes the input is newest-first (id-descending) within
+    // each timestamp. For oldest-first input, reverse() inverts the within-10-pull
+    // order, displacing the 5★ and producing wrong pity that cascades to every
+    // subsequent 5★. Sorting by id is order-independent and correct in all cases.
+    //
+    // For non-numeric ids (paimon.moe synthetic ids), fall back to reverse() to
+    // preserve existing behaviour (no regression).
+    const firstId = wishes[0] && wishes[0].id;
+    const numericIds = firstId != null && /^[0-9]+$/.test(String(firstId));
+    let oldToNew;
+    if (numericIds) {
+        oldToNew = [...wishes].sort((a, b) => {
+            const ta = new Date(a.time).getTime(), tb = new Date(b.time).getTime();
+            if (ta !== tb) return ta - tb;                  // oldest first
+            const ia = BigInt(a.id), ib = BigInt(b.id);     // within same timestamp: id ascending = pull order
+            return ia < ib ? -1 : (ia > ib ? 1 : 0);
+        });
+    } else {
+        oldToNew = [...wishes].reverse();
+    }
     let fives=[], fours=[], threes=[], p5=0, p4=0, guaranteed=false, fatePoints=0;
     oldToNew.forEach(w => {
         p5++; p4++;
@@ -1091,6 +1119,12 @@ function parsePaimonMoe(data) {
         'wish-counter-beginners': '100',
     };
     const wishes = [];
+    // Global counter so every pull gets a UNIQUE id. Without this, two pulls of
+    // the same item in one 10-pull (same name + same timestamp) would share an id
+    // and the Replace-All dedup-by-id would silently collapse them, dropping pulls
+    // and undercounting pity. The counter is appended (not replacing p.id) so the
+    // id stays non-numeric and routes through the reverse() path in analyzeBannerData.
+    let pmSeq = 0;
     Object.keys(bannerKeys).forEach(bk => {
         const banner = data[bk];
         if (!banner || !Array.isArray(banner.pulls)) return;
@@ -1103,7 +1137,7 @@ function parsePaimonMoe(data) {
             const rarity = getItemRarity(name);
             // If rarity is unknown (not in DB), use '0' so checkUnknownItems prompts the user.
             wishes.push({
-                id: 'pm_' + gachaType + '_' + p.time.replace(/[^0-9]/g, '') + '_' + p.id,
+                id: 'pm_' + gachaType + '_' + p.time.replace(/[^0-9]/g, '') + '_' + (p.id || '') + '_' + String(pmSeq++).padStart(8, '0'),
                 gacha_type: gachaType,
                 name: name,
                 item_type: p.type === 'character' ? 'Character' : 'Weapon',
